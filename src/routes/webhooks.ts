@@ -96,6 +96,7 @@ router.post('/:webhookUrl', async (req, res) => {
             amount,
             status: success,
             error: error || null,
+            data: data || null
         });
 
         await newHistory.save();

@@ -6,6 +6,8 @@ const HistorySchma = new mongoose.Schema({
     action: { type: String, required: true },
     amount: { type: String, required: true },
     status: { type: Boolean, required: true },
+    data: { type: mongoose.Schema.Types.Mixed },
+    error: { type: mongoose.Schema.Types.Mixed },
 }, { timestamps: true });
 
 const History = mongoose.model('History', HistorySchma);

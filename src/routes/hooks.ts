@@ -17,14 +17,16 @@ router.get('/', jwtAuth, async (req: JWTRequest, res) => {
 });
 
 router.post('/create', jwtAuth, async (req: JWTRequest, res) => {
-    const { url, coinExApiKey } = req.body;
+    const { url, coinExApiKey, coinExApiSecret, name } = req.body;
     try {
         const userId = req.user?.userId;
 
         const newHook = new Hook({
+            name,
             creator: userId,
             url,
             coinExApiKey,
+            coinExApiSecret, 
         });
         await newHook.save();
 
@@ -39,11 +41,17 @@ router.post('/create', jwtAuth, async (req: JWTRequest, res) => {
 });
 
 router.put('/update/:id', jwtAuth, async (req, res) => {
-    const { url, coinExApiKey, status } = req.body;
+    const { url, coinExApiKey, coinExApiSecret, name, status } = req.body;
     const id = req.params.id;
 
     try {
-        const updatedHook = await Hook.findByIdAndUpdate(id, { url, coinExApiKey, status }, { new: true });
+        const updatedHook = await Hook.findByIdAndUpdate(id, { 
+            url, 
+            coinExApiKey, 
+            coinExApiSecret, 
+            name, 
+            status 
+        }, { new: true });
         return res.status(200).json({
             message: 'Update hook successful',
             hook: updatedHook

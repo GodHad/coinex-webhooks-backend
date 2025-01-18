@@ -26,7 +26,7 @@ const generateSignature = (
 const placeOrderOnCoinEx = async (
     symbol: string,
     action: string,
-    amount: number,
+    amount: string,
     coinExApiKey: string,
     coinExApiSecret: string
 ): Promise<{ success: boolean; data?: any; error?: any }> => {
@@ -38,7 +38,7 @@ const placeOrderOnCoinEx = async (
         market_type: 'FUTURES',
         side: action,
         type: 'market',
-        amount: String(amount),
+        amount: amount,
     };
 
     const signedStr = generateSignature(coinExApiSecret, '/futures/order', data, timestamp);
@@ -71,18 +71,18 @@ router.post('/:webhookUrl', async (req, res) => {
     try {
         const { webhookUrl } = req.params;
         const webhook = await Hook.findOne({ url: webhookUrl });
-        const { symbol, action, amount } = req.body;
+        const { ticker, action, amount, exchange } = req.body;
 
         if (!webhook || webhook.status === 1) {
             return res.status(400).json({ message: 'Webhook URL is not available or disabled' });
         }
 
-        if (!symbol || !action || !amount || (action !== 'buy' && action !== 'sell')) {
+        if (!ticker || !action || !amount || (action !== 'buy' && action !== 'sell') || exchange !== 'CoinEx') {
             return res.status(400).json({ message: 'Invalid request payload' });
         }
 
         const { success, data, error } = await placeOrderOnCoinEx(
-            symbol,
+            ticker,
             action,
             amount,
             webhook.coinExApiKey,
@@ -91,7 +91,7 @@ router.post('/:webhookUrl', async (req, res) => {
 
         const newHistory = new History({
             hook: webhook._id,
-            symbol,
+            symbol: ticker,
             action,
             amount,
             status: success,

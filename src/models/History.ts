@@ -4,7 +4,7 @@ const HistorySchma = new mongoose.Schema({
     hook: { type: mongoose.Schema.Types.ObjectId, ref: 'Hook', required: true },
     symbol: { type: String, required: true },
     action: { type: String, required: true },
-    amount: { type: Number, required: true },
+    amount: { type: String, required: true },
     status: { type: Boolean, required: true },
 }, { timestamps: true });
 

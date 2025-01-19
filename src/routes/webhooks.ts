@@ -10,19 +10,14 @@ const router = express.Router();
 const generateSignature = (
     secret: string,
     requestPath: string,
-    params: {
-        market: string;
-        market_type: string;
-        side: string;
-        type: string;
-        amount: string;
-    },
+    params: any,
     timestamp: string
 ) => {
-    const bodyStr = qs.stringify(params);
+    const bodyStr = qs.stringify(params) || ''; 
     const preparedStr = `POST${requestPath}?${bodyStr}${timestamp}`;
+    console.log('Prepared string for signature:', preparedStr);
     return crypto.createHmac('sha256', secret).update(preparedStr).digest('hex').toLowerCase();
-}
+};
 
 const placeOrderOnCoinEx = async (
     symbol: string,

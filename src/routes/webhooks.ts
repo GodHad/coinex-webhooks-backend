@@ -3,6 +3,7 @@ import Hook from '../models/Hook';
 import History from '../models/History';
 import crypto from 'crypto';
 import axios from 'axios';
+import qs from 'qs';
 
 const router = express.Router();
 
@@ -18,8 +19,8 @@ const generateSignature = (
     },
     timestamp: string
 ) => {
-    const bodyStr = JSON.stringify(params);
-    const preparedStr = `POST${requestPath}${bodyStr}${timestamp}`;
+    const bodyStr = qs.stringify(params);
+    const preparedStr = `POST${requestPath}?${bodyStr}${timestamp}`;
     return crypto.createHmac('sha256', secret).update(preparedStr).digest('hex').toLowerCase();
 }
 
@@ -41,7 +42,7 @@ const placeOrderOnCoinEx = async (
         amount: amount,
     };
 
-    const signedStr = generateSignature(coinExApiSecret, '/futures/order', data, timestamp);
+    const signedStr = generateSignature(coinExApiSecret, '/v2/futures/order', data, timestamp);
 
     try {
         const result = await axios.post(url, data, {

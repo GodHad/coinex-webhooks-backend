@@ -5,17 +5,17 @@ import crypto from 'crypto';
 import axios from 'axios';
 
 const router = express.Router();
+const url = 'https://api.coinex.com/v2/futures/order';
 
-const generateSignature = (
-    secret: string,
-    requestPath: string,
-    body: string,
-    timestamp: string
-) => {
-    const preparedStr = `POST${requestPath}${body}${timestamp}`;
-    console.log('Prepared string for signature:', preparedStr);
-    return crypto.createHmac('sha256', secret).update(preparedStr).digest('hex').toLowerCase();
-};
+function createAuthorization(method: string, request_path: string, body_json: string, timestamp: string, SECRET_KEY: string) {
+    var text = method + request_path + body_json + timestamp;
+    console.log(text);
+    return crypto
+        .createHmac("sha256", SECRET_KEY)
+        .update(text)
+        .digest("hex")
+        .toLowerCase();
+}
 
 const placeOrderOnCoinEx = async (
     symbol: string,
@@ -24,8 +24,9 @@ const placeOrderOnCoinEx = async (
     coinExApiKey: string,
     coinExApiSecret: string
 ): Promise<{ success: boolean; data?: any; error?: any }> => {
-    const url = 'https://api.coinex.com/v2/futures/order';
-    const timestamp = Date.now().toString();
+    const response = await axios.get('https://api.coinex.com/v2/time');
+    const timestamp = response.data.data.timestamp.toString();
+    console.log(timestamp, typeof timestamp)
 
     const data = JSON.stringify({
         market: symbol,
@@ -35,16 +36,14 @@ const placeOrderOnCoinEx = async (
         amount: amount,
     });
 
-    const signedStr = generateSignature(coinExApiSecret, '/v2/futures/order', data, timestamp);
-
     try {
         const result = await axios.post(url, data, {
             headers: {
                 'Content-Type': 'application/json; charset=utf-8',
                 Accept: 'application/json',
-                'X-COINEX-KEY': coinExApiKey,
-                'X-COINEX-SIGN': signedStr,
-                'X-COINEX-TIMESTAMP': timestamp,
+                "X-COINEX-KEY": coinExApiKey,
+                "X-COINEX-SIGN": createAuthorization("POST", "/v2/futures/order", data, timestamp, coinExApiSecret),
+                "X-COINEX-TIMESTAMP": timestamp,
             },
         });
 

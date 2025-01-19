@@ -3,18 +3,17 @@ import Hook from '../models/Hook';
 import History from '../models/History';
 import crypto from 'crypto';
 import axios from 'axios';
-import qs from 'qs';
 
 const router = express.Router();
 
 const generateSignature = (
     secret: string,
     requestPath: string,
-    params: any,
+    body: any,
     timestamp: string
 ) => {
-    const bodyStr = qs.stringify(params) || ''; 
-    const preparedStr = `POST${requestPath}?${bodyStr}${timestamp}`;
+    const bodyStr = JSON.stringify(body) ?? ''; 
+    const preparedStr = `POST${requestPath}${bodyStr}${timestamp}`;
     console.log('Prepared string for signature:', preparedStr);
     return crypto.createHmac('sha256', secret).update(preparedStr).digest('hex').toLowerCase();
 };

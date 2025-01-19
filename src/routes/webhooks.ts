@@ -9,11 +9,10 @@ const router = express.Router();
 const generateSignature = (
     secret: string,
     requestPath: string,
-    body: any,
+    body: string,
     timestamp: string
 ) => {
-    const bodyStr = JSON.stringify(body) ?? ''; 
-    const preparedStr = `POST${requestPath}${bodyStr}${timestamp}`;
+    const preparedStr = `POST${requestPath}${body}${timestamp}`;
     console.log('Prepared string for signature:', preparedStr);
     return crypto.createHmac('sha256', secret).update(preparedStr).digest('hex').toLowerCase();
 };
@@ -26,15 +25,15 @@ const placeOrderOnCoinEx = async (
     coinExApiSecret: string
 ): Promise<{ success: boolean; data?: any; error?: any }> => {
     const url = 'https://api.coinex.com/v2/futures/order';
-    const timestamp = Math.floor(Date.now()).toString();
+    const timestamp = Date.now().toString();
 
-    const data = {
+    const data = JSON.stringify({
         market: symbol,
         market_type: 'FUTURES',
         side: action,
         type: 'market',
         amount: amount,
-    };
+    });
 
     const signedStr = generateSignature(coinExApiSecret, '/v2/futures/order', data, timestamp);
 

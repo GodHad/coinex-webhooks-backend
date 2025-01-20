@@ -7,9 +7,16 @@ import { JWTRequest } from '../types/JWTRequest';
 
 const router = express.Router();
 
+function isValidUsername(username: string) {
+    const usernameRegex = /^[a-z0-9]+$/;
+    return usernameRegex.test(username);
+}
+
 router.post('/register', async (req: Request, res: Response) => {
     const { firstName, lastName, email, password } = req.body;
-
+    if (isValidUsername(email)) {
+        return res.status(400).json({ message: 'Username can only contain lowercase letters and numbers, with no spaces.' });
+    }
     try {
         const existingUser = await User.findOne({ email });
         if (existingUser) {
@@ -105,11 +112,14 @@ router.post('/update-user', jwtAuth, async (req: JWTRequest, res) => {
             isUpdated = true;
         }
         if (email && email !== user.email) {
+            if (isValidUsername(email)) {
+                return res.status(400).json({ message: 'Username can only contain lowercase letters and numbers, with no spaces.' });
+            }
             const existingUser = await User.findOne({ email });
             if (existingUser) {
                 return res.status(400).json({ message: 'Email is already exists!' })
             }
-            
+
             user.email = email;
             isUpdated = true;
         }

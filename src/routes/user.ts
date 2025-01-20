@@ -14,7 +14,7 @@ function isValidUsername(username: string) {
 
 router.post('/register', async (req: Request, res: Response) => {
     const { firstName, lastName, email, password } = req.body;
-    if (isValidUsername(email)) {
+    if (!isValidUsername(email)) {
         return res.status(400).json({ message: 'Username can only contain lowercase letters and numbers, with no spaces.' });
     }
     try {
@@ -112,7 +112,7 @@ router.post('/update-user', jwtAuth, async (req: JWTRequest, res) => {
             isUpdated = true;
         }
         if (email && email !== user.email) {
-            if (isValidUsername(email)) {
+            if (!isValidUsername(email)) {
                 return res.status(400).json({ message: 'Username can only contain lowercase letters and numbers, with no spaces.' });
             }
             const existingUser = await User.findOne({ email });

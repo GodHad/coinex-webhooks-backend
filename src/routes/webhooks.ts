@@ -3,6 +3,7 @@ import Hook from '../models/Hook';
 import History from '../models/History';
 import crypto from 'crypto';
 import axios from 'axios';
+import User from '../models/User';
 
 const router = express.Router();
 const url = 'https://api.coinex.com/v2/futures/order';
@@ -26,7 +27,6 @@ const placeOrderOnCoinEx = async (
 ): Promise<{ success: boolean; data?: any; error?: any }> => {
     const response = await axios.get('https://api.coinex.com/v2/time');
     const timestamp = response.data.data.timestamp.toString();
-    console.log(timestamp, typeof timestamp)
 
     const data = JSON.stringify({
         market: symbol,
@@ -63,7 +63,10 @@ const placeOrderOnCoinEx = async (
 router.post('/:webhookUrl', async (req, res) => {
     try {
         const { webhookUrl } = req.params;
-        const webhook = await Hook.findOne({ url: webhookUrl });
+        const [username, url] = webhookUrl.split('/');
+
+        const user = await User.findOne({ email: username });
+        const webhook = await Hook.findOne({ url: webhookUrl, creator: user?._id });
         const { ticker, action, amount, exchange } = req.body;
 
         if (!webhook || webhook.status === 1) {

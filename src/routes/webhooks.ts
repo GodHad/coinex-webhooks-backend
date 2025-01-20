@@ -60,10 +60,9 @@ const placeOrderOnCoinEx = async (
     }
 };
 
-router.post('/:webhookUrl', async (req, res) => {
+router.post('/:username/:webhookUrl', async (req, res) => {
     try {
-        const { webhookUrl } = req.params;
-        const [username, url] = webhookUrl.split('/');
+        const { username, webhookUrl } = req.params;
 
         const user = await User.findOne({ email: username });
         const webhook = await Hook.findOne({ url: webhookUrl, creator: user?._id });

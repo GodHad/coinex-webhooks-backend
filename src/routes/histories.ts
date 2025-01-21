@@ -29,7 +29,7 @@ router.get('/', jwtAuth, async (req: JWTRequest, res) => {
             success: true,
             histories,
             pagination: {
-                currentPage: Number(currentPage),
+                currentPage: Number(currentPage) <= Math.ceil(totalHistory / Number(perPage)) ? Number(currentPage) : 1,
                 perPage: Number(perPage),
                 totalPages: Math.ceil(totalHistory / Number(perPage)),
                 totalItems: totalHistory,

@@ -76,34 +76,58 @@ router.post('/:username/:webhookUrl', async (req, res) => {
             return res.status(400).json({ message: 'Invalid request payload' });
         }
 
-        const { success, data, error } = await placeOrderOnCoinEx(
-            ticker,
-            action,
-            amount,
-            webhook.coinExApiKey,
-            webhook.coinExApiSecret
-        );
+        let requiredActions = [];
 
-        const newHistory = new History({
-            hook: webhook._id,
-            symbol: ticker,
-            action,
-            amount,
-            status: success,
-            error: error || null,
-            data: data || null
-        });
+        if (action === 'buy') {
+            if (webhook.positionState === 'short') {
+                requiredActions.push({ side: 'buy', amount });
+                requiredActions.push({ side: 'buy', amount });
+            } else if (webhook.positionState === 'neutral') {
+                requiredActions.push({ side: 'buy', amount });
+            }
+        } else if (action === 'sell') {
+            if (webhook.positionState === 'long') {
+                requiredActions.push({ side: 'sell', amount });
+                requiredActions.push({ side: 'sell', amount });
+            } else if (webhook.positionState === 'neutral') {
+                requiredActions.push({ side: 'sell', amount });
+            }
+        }
 
-        await newHistory.save();
+        for (const requiredAction of requiredActions) {
+            const { success, data, error } = await placeOrderOnCoinEx(
+                ticker,
+                requiredAction.side,
+                requiredAction.amount,
+                webhook.coinExApiKey,
+                webhook.coinExApiSecret
+            );
 
-        webhook.totalCalls = (webhook.totalCalls || 0) + 1;
+            if (!success) {
+                return res.status(500).json({ message: 'Order placement failed', error });
+            }
+
+            const newHistory = new History({
+                hook: webhook._id,
+                symbol: ticker,
+                action,
+                amount,
+                status: success,
+                error: error || null,
+                data: data || null
+            });
+
+            await newHistory.save();
+        }
+
+        if (action === 'buy') {
+            webhook.positionState = 'long';
+        } else if (action === 'sell') {
+            webhook.positionState = 'short';
+        }
         await webhook.save();
 
-        if (success) {
-            return res.status(200).json({ message: 'Order placed successfully', data });
-        } else {
-            return res.status(500).json({ message: 'Order placement failed', error });
-        }
+        return res.status(200).json({ message: 'Order placed successfully' });
     } catch (error) {
         console.error('Error during webhook handling:', error);
         return res.status(500).json({ message: 'Server error' });

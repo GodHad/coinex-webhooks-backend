@@ -60,6 +60,51 @@ const placeOrderOnCoinEx = async (
     }
 };
 
+const handleTradeSignal = (action: string, tradeDirection: string, positionState: string) => {
+    let requiredActions: { action: string; isClosing: boolean }[] = [];
+
+    switch (tradeDirection) {
+        case "BOTH":
+            if (action === "buy") {
+                if (positionState === "short") {
+                    requiredActions.push({ action: "buy", isClosing: true });
+                    requiredActions.push({ action: "buy", isClosing: false });
+                } else if (positionState === "neutral" || positionState === "long") {
+                    requiredActions.push({ action: "buy", isClosing: false });
+                }
+            } else if (action === "sell") {
+                if (positionState === "long") {
+                    requiredActions.push({ action: "sell", isClosing: true });
+                    requiredActions.push({ action: "sell", isClosing: false });
+                } else if (positionState === "neutral" || positionState === "short") {
+                    requiredActions.push({ action: "sell", isClosing: false });
+                }
+            }
+            break;
+
+        case "SHORT_ONLY":
+            if (action === "sell" && positionState === "neutral") {
+                requiredActions.push({ action: "sell", isClosing: false });
+            } else if (action === "buy" && positionState === "short") {
+                requiredActions.push({ action: "buy", isClosing: true });
+            }
+            break;
+
+        case "LONG_ONLY":
+            if (action === "buy" && positionState === "neutral") {
+                requiredActions.push({ action: "buy", isClosing: false });
+            } else if (action === "sell" && positionState === "long") {
+                requiredActions.push({ action: "sell", isClosing: true });
+            }
+            break;
+
+        default:
+            console.error("Invalid trade direction");
+    }
+
+    return requiredActions;
+};
+
 router.post('/:username/:webhookUrl', async (req, res) => {
     try {
         const { username, webhookUrl } = req.params;
@@ -76,29 +121,13 @@ router.post('/:username/:webhookUrl', async (req, res) => {
             return res.status(400).json({ message: 'Invalid request payload' });
         }
 
-        let requiredActions = [];
+        const requiredActions = handleTradeSignal(action, webhook.tradeDirection, webhook.positionState);
 
-        if (action === 'buy') {
-            if (webhook.positionState === 'short') {
-                requiredActions.push({ side: 'buy', amount });
-                requiredActions.push({ side: 'buy', amount });
-            } else if (webhook.positionState === 'neutral') {
-                requiredActions.push({ side: 'buy', amount });
-            }
-        } else if (action === 'sell') {
-            if (webhook.positionState === 'long') {
-                requiredActions.push({ side: 'sell', amount });
-                requiredActions.push({ side: 'sell', amount });
-            } else if (webhook.positionState === 'neutral') {
-                requiredActions.push({ side: 'sell', amount });
-            }
-        }
-
-        for (const requiredAction of requiredActions) {
+        for (const { action, isClosing } of requiredActions) {
             const { success, data, error } = await placeOrderOnCoinEx(
                 ticker,
-                requiredAction.side,
-                requiredAction.amount,
+                action,
+                amount,
                 webhook.coinExApiKey,
                 webhook.coinExApiSecret
             );
@@ -116,16 +145,18 @@ router.post('/:username/:webhookUrl', async (req, res) => {
                 error: error || null,
                 data: data || null
             });
-
             await newHistory.save();
-        }
 
-        if (action === 'buy') {
-            webhook.positionState = 'long';
-        } else if (action === 'sell') {
-            webhook.positionState = 'short';
+            if (isClosing) {
+                webhook.positionState = "neutral";
+            } else if (action === "buy") {
+                webhook.positionState = "long";
+            } else if (action === "sell") {
+                webhook.positionState = "short";
+            }
+
+            await webhook.save();
         }
-        await webhook.save();
 
         return res.status(200).json({ message: 'Order placed successfully' });
     } catch (error) {

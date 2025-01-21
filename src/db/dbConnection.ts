@@ -12,10 +12,10 @@ export const init = () => {
     .connect(DB_CONNECTION)
     .then(async (v) => {
       await Hook.updateMany(
-        { positionState: { $exists: false } }, // Only update records where positionState is missing
-        { $set: { positionState: 'neutral' } }
+        { tradeDirection: { $exists: false } }, // Only update records where tradeDirection is missing
+        { $set: { tradeDirection: 'BOTH' } }
       );
-      console.log('All missing positionState fields set to neutral.');
+      console.log('All missing tradeDirection fields set to neutral.');
 
       console.log(`mongodb database connected`);
     })

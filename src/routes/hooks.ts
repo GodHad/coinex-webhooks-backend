@@ -17,7 +17,7 @@ router.get('/', jwtAuth, async (req: JWTRequest, res) => {
 });
 
 router.post('/create', jwtAuth, async (req: JWTRequest, res) => {
-    const { url, coinExApiKey, coinExApiSecret, name } = req.body;
+    const { url, coinExApiKey, coinExApiSecret, name, tradeDirection } = req.body;
     try {
         const userId = req.user?.userId;
 
@@ -27,6 +27,7 @@ router.post('/create', jwtAuth, async (req: JWTRequest, res) => {
             url,
             coinExApiKey,
             coinExApiSecret, 
+            tradeDirection
         });
         await newHook.save();
 
@@ -41,7 +42,7 @@ router.post('/create', jwtAuth, async (req: JWTRequest, res) => {
 });
 
 router.put('/update/:id', jwtAuth, async (req, res) => {
-    const { url, coinExApiKey, coinExApiSecret, name, status } = req.body;
+    const { url, coinExApiKey, coinExApiSecret, name, status, tradeDirection } = req.body;
     const id = req.params.id;
 
     try {
@@ -50,6 +51,7 @@ router.put('/update/:id', jwtAuth, async (req, res) => {
             coinExApiKey, 
             coinExApiSecret, 
             name, 
+            tradeDirection,
             status 
         }, { new: true });
         return res.status(200).json({

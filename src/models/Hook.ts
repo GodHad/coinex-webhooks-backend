@@ -9,7 +9,8 @@ const hookSchema = new mongoose.Schema(
         coinExApiKey: { type: String, required: true },
         coinExApiSecret: { type: String, required: true },
         status: { type: Number, default: 0 },
-        positionState: { type: String, default: 'neutral' }
+        positionState: { type: String, default: 'neutral' },
+        tradeDirection: { type: String, enum: ["BOTH", "LONG_ONLY", "SHORT_ONLY"], default: "BOTH" }
     },
     { timestamps: true }
 );

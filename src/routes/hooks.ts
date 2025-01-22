@@ -2,13 +2,16 @@ import express from 'express';
 import { jwtAuth } from '../middleware/authorization';
 import { JWTRequest } from '../types/JWTRequest';
 import Hook from '../models/Hook';
+import User from '../models/User';
+import { v4 as uuidv4 } from 'uuid';
+import AdminHook from '../models/AdminHook';
 
 const router = express.Router();
 
 router.get('/', jwtAuth, async (req: JWTRequest, res) => {
     try {
         const userId = req.user?.userId;
-        const hooks = await Hook.find({ creator: userId });
+        const hooks = await Hook.find({ creator: userId }).populate('adminHook');
         return res.status(200).json(hooks);
     } catch (error) {
         console.error("Error during getting hooks:", error);
@@ -17,46 +20,108 @@ router.get('/', jwtAuth, async (req: JWTRequest, res) => {
 });
 
 router.post('/create', jwtAuth, async (req: JWTRequest, res) => {
-    const { url, coinExApiKey, coinExApiSecret, name, tradeDirection } = req.body;
+    const { coinExApiKey, coinExApiSecret, name, tradeDirection, isUsingAdminHook } = req.body;
+
     try {
         const userId = req.user?.userId;
+        const user = await User.findById(userId);
+
+        if (!user) {
+            return res.status(400).json({ message: 'User not found' });
+        }
+
+        const isSubscribed =
+            user.subscribed === 1 &&
+            user.subscribeEndDate &&
+            new Date(user.subscribeEndDate).getTime() > Date.now();
+
+        if (isUsingAdminHook && !isSubscribed) {
+            return res.status(403).json({ message: 'You are not allowed this action' });
+        }
+
+        const url = !isUsingAdminHook && isSubscribed ? uuidv4() : req.body.url;
+
+        if (isUsingAdminHook) {
+            const existingHook = await AdminHook.findById(req.body.adminHook);
+            if (!existingHook) {
+                return res.status(404).json({ message: 'Hook not found' });
+            }
+        }
 
         const newHook = new Hook({
             name,
             creator: userId,
-            url,
+            url: isUsingAdminHook ? undefined : url,
+            adminHook: isUsingAdminHook ? req.body.adminHook : undefined,
             coinExApiKey,
-            coinExApiSecret, 
-            tradeDirection
+            coinExApiSecret,
+            tradeDirection,
+            isSubscribed,
         });
-        await newHook.save();
+
+        (await newHook.save()).populate('adminHook');
 
         return res.status(200).json({
             message: 'Create new hook successful',
-            hook: newHook
-        })
+            hook: newHook,
+        });
     } catch (error) {
-        console.error("Error during creating hook:", error);
+        console.error('Error during creating hook:', error);
         return res.status(500).json({ message: 'Server error' });
     }
 });
 
-router.put('/update/:id', jwtAuth, async (req, res) => {
-    const { url, coinExApiKey, coinExApiSecret, name, status, tradeDirection } = req.body;
-    const id = req.params.id;
+
+router.put('/update/:id', jwtAuth, async (req: JWTRequest, res) => {
+    const { coinExApiKey, coinExApiSecret, name, status, tradeDirection, isUsingAdminHook } = req.body;
+    const { id } = req.params;
 
     try {
-        const updatedHook = await Hook.findByIdAndUpdate(id, { 
-            url, 
-            coinExApiKey, 
-            coinExApiSecret, 
-            name, 
+        const userId = req.user?.userId;
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(400).json({ message: 'User not found' });
+        }
+
+        const isSubscribed = user.subscribed === 1 && user.subscribeEndDate && new Date(user.subscribeEndDate).getTime() > Date.now();
+
+        if (isUsingAdminHook && !isSubscribed) {
+            return res.status(403).json({ message: 'You are not allowed this action' });
+        }
+
+        const updatePayload: any = {
+            coinExApiKey,
+            coinExApiSecret,
+            name,
             tradeDirection,
-            status 
-        }, { new: true });
+            status,
+        };
+
+        if (!isUsingAdminHook) {
+            if (isSubscribed) {
+                updatePayload.url = req.body.url || uuidv4();
+            } else {
+                updatePayload.url = req.body.url;
+            }
+            updatePayload.$unset = { adminHook: '' }; 
+        } else if (isUsingAdminHook) {
+            if (!req.body.adminHook) {
+                return res.status(400).json({ message: 'Admin hook must be provided when using adminHook.' });
+            }
+            const existingHook = await AdminHook.findById(req.body.adminHook);
+            if (!existingHook) {
+                return res.status(404).json({ message: 'Hook not found' });
+            }
+            updatePayload.adminHook = req.body.adminHook;
+            updatePayload.$unset = { url: '' }; 
+        }
+
+        const updatedHook = await Hook.findByIdAndUpdate(id, updatePayload, { new: true }).populate('adminHook');
+
         return res.status(200).json({
             message: 'Update hook successful',
-            hook: updatedHook
+            hook: updatedHook,
         });
     } catch (error) {
         console.error("Error during updating hook: ", error);

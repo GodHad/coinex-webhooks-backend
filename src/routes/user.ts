@@ -1,149 +1,55 @@
-import express, { Request, Response } from 'express';
-import bcrypt from 'bcryptjs';
+import express from 'express';
+import { adminAuth } from '../middleware/authorization';
 import User from '../models/User';
-import jwt from 'jsonwebtoken';
-import { jwtAuth } from '../middleware/authorization';
-import { JWTRequest } from '../types/JWTRequest';
 
 const router = express.Router();
 
-function isValidUsername(username: string) {
-    const usernameRegex = /^[a-z0-9]+$/;
-    return usernameRegex.test(username);
-}
-
-router.post('/register', async (req: Request, res: Response) => {
-    const { firstName, lastName, email, password } = req.body;
-    if (!isValidUsername(email)) {
-        return res.status(400).json({ message: 'Username can only contain lowercase letters and numbers, with no spaces.' });
-    }
+router.get('/', adminAuth, async (req, res) => {
     try {
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return res.status(400).json({ message: 'User already exists' });
-        }
-
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
-
-        const newUser = new User({
-            firstName,
-            lastName,
-            email,
-            password: hashedPassword
-        });
-
-        await newUser.save();
-
-        const token = jwt.sign({ userId: newUser._id }, 'secret', { expiresIn: '1h' });
-
-        res.status(201).json({
-            message: 'User registered successfully',
-            token,
-            user: newUser
-        });
+        const users = await User.find();
+        return res.status(200).json(users);
     } catch (error) {
-        console.log("Failed to register user: ", error);
-        res.status(500).json({ message: 'Server error' });
+        console.error('Error fetching histories: ', error);
+        return res.status(500).json({ success: false, message: 'Server Error' });
     }
 });
 
-router.post('/login', async (req: Request, res: Response) => {
-    const { email, password } = req.body;
-
+router.put('/update-subscribe/:id', adminAuth, async (req, res) => {
     try {
-        const user = await User.findOne({ email });
+        const { id } = req.params;
+        const user = await User.findById(id);
         if (!user) {
-            return res.status(400).json({ message: 'Invalid credentials' });
+            return res.status(400).json({message: 'User not found'});
         }
 
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            return res.status(400).json({ message: 'Invalid credentials' });
-        }
+        const subscribed = user.subscribed;
+        if (subscribed === 0 || subscribed === 3) {
+            user.subscribed = 1;
+            const currentDate = new Date();
+            currentDate.setFullYear(currentDate.getFullYear() + 1);
 
-        const token = jwt.sign({ userId: user._id }, 'secret', { expiresIn: '1h' });
-
-        res.status(200).json({
-            message: 'Login successful',
-            token,
-            user
-        });
-    } catch (error) {
-        console.log(error);
-        res.status(500).json({ message: 'Server error' });
-    }
-});
-
-router.get('/login-with-jwt', jwtAuth, async (req: JWTRequest, res) => {
-    const userId = req.user?.userId;
-
-    try {
-        const newToken = jwt.sign({ userId }, 'secret', { expiresIn: '1h' });
-        const user = await User.findById(userId);
-
-        return res.status(200).json({
-            message: 'Login successful',
-            token: newToken,
-            user
-        });
-    } catch (error) {
-        console.error("Error during token verification:", error);
-        return res.status(500).json({ message: 'Server error' });
-    }
-});
-
-router.post('/update-user', jwtAuth, async (req: JWTRequest, res) => {
-    const { firstName, lastName, email, password } = req.body;
-    try {
-        const user = await User.findById(req.user?.userId);
-        if (!user) {
-            return res.status(404).json({ message: 'User not found' });
-        }
-
-        let isUpdated = false;
-
-        if (firstName && firstName !== user.firstName) {
-            user.firstName = firstName;
-            isUpdated = true;
-        }
-        if (lastName && lastName !== user.lastName) {
-            user.lastName = lastName;
-            isUpdated = true;
-        }
-        if (email && email !== user.email) {
-            if (!isValidUsername(email)) {
-                return res.status(400).json({ message: 'Username can only contain lowercase letters and numbers, with no spaces.' });
-            }
-            const existingUser = await User.findOne({ email });
-            if (existingUser) {
-                return res.status(400).json({ message: 'Email is already exists!' })
-            }
-
-            user.email = email;
-            isUpdated = true;
-        }
-        if (password) {
-            const salt = await bcrypt.genSalt(10);
-            user.password = await bcrypt.hash(password, salt);
-            isUpdated = true;
-        }
-
-        if (isUpdated) {
-            await user.save();
-            return res.status(200).json({
-                message: 'Update successful',
-                user
-            });
+            user.subscribeEndDate = currentDate;
         } else {
-            return res.status(400).json({ message: 'No changes detected' });
+            user.subscribed = 3 - subscribed;
         }
-    } catch (error) {
-        console.error("Error during updating user:", error);
-        return res.status(500).json({ message: 'Server error' });
-    }
-});
 
+        await user.save();
+        return res.status(200).json({user, message: 'Update Subscription Successfully'})
+    } catch (error) {
+        console.error("Error updating subscribe", error);
+        return res.status(500).json({ message: 'Server Error' });
+    }
+})
+
+router.delete('/delete/:id', adminAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        await User.findByIdAndDelete(id);
+        return res.status(200).json({ message: 'Delete successful' });
+    } catch (error) {
+        console.error("Error deleting user: ", error);
+        return res.status(500).json({ success: false, message: 'Server Error' });
+    }
+})
 
 export default router;
-

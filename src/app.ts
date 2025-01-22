@@ -2,10 +2,12 @@ import { createServer } from "http";
 import express from 'express';
 import cors from 'cors';
 import { init } from "./db/dbConnection";
-import authRoutes from './routes/user';
+import authRoutes from './routes/auth';
 import hooksRoutes from './routes/hooks';
 import webhooksRoutes from './routes/webhooks';
 import historyRoutes from './routes/histories';
+import userRoutes from './routes/user';
+import adminRoutes from './routes/admin';
 
 const app = express();
 const PORT = 5000;
@@ -18,6 +20,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/hooks', hooksRoutes);
 app.use('/api/webhooks', webhooksRoutes);
 app.use('/api/histories', historyRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/admin', adminRoutes);
 
 const startServer = async () => {
     try {

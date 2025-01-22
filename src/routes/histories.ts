@@ -22,7 +22,7 @@ router.get('/', jwtAuth, async (req: JWTRequest, res) => {
         const skip = (Number(currentPage) - 1) * Number(perPage);
         const limit = Number(perPage);
 
-        const histories = await History.find(filter).populate('hook').skip(skip).limit(limit);
+        const histories = await History.find(filter).populate('hook').skip(skip).limit(limit).sort({ createdAt: -1 });
         const totalHistory = await History.countDocuments(filter);
 
         return res.status(200).send({

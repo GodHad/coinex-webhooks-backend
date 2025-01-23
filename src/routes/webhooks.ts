@@ -3,7 +3,7 @@ import Hook from '../models/Hook';
 import History from '../models/History';
 import crypto from 'crypto';
 import axios from 'axios';
-import User from '../models/User';
+import User, { IUser } from '../models/User';
 import AdminHook from '../models/AdminHook';
 
 const router = express.Router();
@@ -166,7 +166,7 @@ router.post('/:webhookUrl', async (req, res) => {
 
         const adminHook = await AdminHook.findOne({ url: webhookUrl });
         if (adminHook) {
-            const webhooks = await Hook.find({ adminHook: adminHook._id });
+            const webhooks = await Hook.find({ adminHook: adminHook._id }).populate<{creator: IUser}>('creator');
 
             if (!webhooks.length) {
                 return res.status(404).json({ message: 'No webhooks associated with this adminHook' });
@@ -184,7 +184,18 @@ router.post('/:webhookUrl', async (req, res) => {
                     continue;
                 }
 
-                const result = await handleTrade(webhook, ticker, action, amount);
+                const isSubscribed = webhook.creator.subscribed === 1 && webhook.creator.subscribeEndDate && new Date(webhook.creator.subscribeEndDate).getTime() > Date.now();
+
+                if (!isSubscribed) {
+                    results.push({
+                        webhookId: webhook._id,
+                        success: false,
+                        message: 'Subscription ended'
+                    })
+                    continue;
+                }
+
+                const result = await handleTrade(webhook, ticker, action, webhook.amount || amount);
                 results.push({
                     webhookId: webhook._id,
                     success: result.success,

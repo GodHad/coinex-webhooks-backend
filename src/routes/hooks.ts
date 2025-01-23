@@ -57,6 +57,7 @@ router.post('/create', jwtAuth, async (req: JWTRequest, res) => {
             coinExApiSecret,
             tradeDirection,
             isSubscribed,
+            amount: req.body.amount || 0
         });
 
         (await newHook.save()).populate('adminHook');
@@ -114,6 +115,7 @@ router.put('/update/:id', jwtAuth, async (req: JWTRequest, res) => {
                 return res.status(404).json({ message: 'Hook not found' });
             }
             updatePayload.adminHook = req.body.adminHook;
+            updatePayload.amount = req.body.amount || 0;
             updatePayload.$unset = { url: '' }; 
         }
 

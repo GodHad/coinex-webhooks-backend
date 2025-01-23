@@ -9,6 +9,8 @@ import AdminHook from '../models/AdminHook';
 const router = express.Router();
 const url = 'https://api.coinex.com/v2/futures/order';
 
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 function createAuthorization(method: string, request_path: string, body_json: string, timestamp: string, SECRET_KEY: string) {
     var text = method + request_path + body_json + timestamp;
     console.log(text);
@@ -147,6 +149,7 @@ const handleTrade = async (
         }
 
         await webhook.save();
+        await delay(60000);
     }
 
     return { success: true, message: 'Order placed successfully' };

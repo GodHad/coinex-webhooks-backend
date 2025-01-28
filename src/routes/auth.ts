@@ -80,8 +80,11 @@ router.get('/login-with-jwt', jwtAuth, async (req: JWTRequest, res) => {
 
     try {
         const newToken = jwt.sign({ userId }, 'secret', { expiresIn: '1h' });
-        const user = await User.findById(userId);
-
+        const user = await User.findByIdAndUpdate(
+            userId,
+            { $set: { updatedAt: new Date() } }, 
+            { new: true }
+        );
         return res.status(200).json({
             message: 'Login successful',
             token: newToken,

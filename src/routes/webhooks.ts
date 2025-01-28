@@ -137,8 +137,16 @@ const handleTrade = async (
             status: success,
             error: error || null,
             data: data || null,
+            positionState: webhook.positionState,
+            tradeDirection: webhook.tradeDirection
         });
         await newHistory.save();
+
+        await Hook.findByIdAndUpdate(
+            webhook._id,
+            { $set: { updatedAt: new Date() } }, 
+            { new: true }
+        );
 
         if (isClosing) {
             webhook.positionState = 'neutral';

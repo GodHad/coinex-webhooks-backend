@@ -67,8 +67,8 @@ router.get('/get-overview', jwtAuth, async (req: JWTRequest, res) => {
         const histories = await History.find({ hook: { $in: hooks.map(h => h._id) } });
 
         const totalPnl = histories.reduce((sum, history) => {
-            if (history.data.data && history.data.data.realize_pnl !== undefined) {
-                return sum + parseFloat(history.data.data.realize_pnl);
+            if (history.data.data && history.data.data.realized_pnl !== undefined) {
+                return sum + parseFloat(history.data.data.realized_pnl);
             }
             return sum;
         }, 0);

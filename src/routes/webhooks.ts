@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import axios from 'axios';
 import User, { IUser } from '../models/User';
 import AdminHook from '../models/AdminHook';
+import { jwtAuth } from '../middleware/authorization';
 
 const router = express.Router();
 const url = 'https://api.coinex.com/v2/futures/order';
@@ -46,6 +47,40 @@ const placeOrderOnCoinEx = async (
                 Accept: 'application/json',
                 "X-COINEX-KEY": coinExApiKey,
                 "X-COINEX-SIGN": createAuthorization("POST", "/v2/futures/order", data, timestamp, coinExApiSecret),
+                "X-COINEX-TIMESTAMP": timestamp,
+            },
+        });
+
+        return {
+            success: true,
+            data: result.data,
+        };
+    } catch (error: any) {
+        console.error('CoinEx API Request Failed:', error.response?.data || error.message);
+        return {
+            success: false,
+            error: error.response?.data || error.message,
+        };
+    }
+};
+
+const getPositionData = async (
+    symbol: string,
+    coinExApiKey: string,
+    coinExApiSecret: string
+): Promise<{ success: boolean; data?: any; error?: any }> => {
+    const response = await axios.get('https://api.coinex.com/v2/time');
+    const timestamp = response.data.data.timestamp.toStrin
+
+    const url = `/v2/futures/pending-position?market=${symbol}&market_type=FUTURES&page=1&limit=1`
+
+    try {
+        const result = await axios.get('https://api.coinex.com' + url, {
+            headers: {
+                'Content-Type': 'application/json; charset=utf-8',
+                Accept: 'application/json',
+                "X-COINEX-KEY": coinExApiKey,
+                "X-COINEX-SIGN": createAuthorization("GET", url, "", timestamp, coinExApiSecret),
                 "X-COINEX-TIMESTAMP": timestamp,
             },
         });
@@ -142,11 +177,19 @@ const handleTrade = async (
         });
         await newHistory.save();
 
-        await Hook.findByIdAndUpdate(
-            webhook._id,
-            { $set: { updatedAt: new Date() } }, 
-            { new: true }
-        );
+        const result = await getPositionData(ticker, webhook.coinExApiKey, webhook.coinExApiSecret);
+
+        if (result.success) {
+            const data = result.data;
+            if (data.code === 0) {
+                const position = data.data[0];
+                webhook.leverage = position.leverage;
+                webhook.entryPrice = position.avg_entry_price;
+                webhook.stopLossPrice = position.stop_loss_price;
+                webhook.takeProfitPrice = position.take_profit_price;
+                webhook.currentPrice = position.settle_price;
+            }
+        }
 
         if (isClosing) {
             webhook.positionState = 'neutral';
@@ -174,7 +217,7 @@ router.post('/:webhookUrl', async (req, res) => {
 
         const adminHook = await AdminHook.findOne({ url: webhookUrl });
         if (adminHook) {
-            const webhooks = await Hook.find({ adminHook: adminHook._id }).populate<{creator: IUser}>('creator');
+            const webhooks = await Hook.find({ adminHook: adminHook._id }).populate<{ creator: IUser }>('creator');
 
             if (!webhooks.length) {
                 return res.status(404).json({ message: 'No webhooks associated with this adminHook' });
@@ -263,5 +306,29 @@ router.post('/:username/:webhookUrl', async (req, res) => {
         return res.status(500).json({ message: 'Server error' });
     }
 });
+
+
+router.get('/resend/:id', jwtAuth, async (req, res) => {
+    const id = req.params.id;
+
+    try {
+        const history = await History.findById(id);
+        const webhook = await Hook.findById(history?.hook);
+
+        if (history && webhook) {
+            const result = await handleTrade(webhook, history.symbol, history.action, history.amount);
+            if (!result.success) {
+                return res.status(500).json({ message: result.message });
+            }
+
+            return res.status(200).json({ message: result.message });
+        } else {
+            return res.status(400).json({ message: 'Not found' });
+        }
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+})
 
 export default router;

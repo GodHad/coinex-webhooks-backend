@@ -14,6 +14,11 @@ interface IHook extends Document {
     positionState: string;
     tradeDirection: string;
     isSubscribed: boolean;
+    leverage?: string;
+    entryPrice?: string;
+    stopLossPrice?: string;
+    takeProfitPrice?: string;
+    currentPrice?: string;
 }
 
 const hookSchema = new Schema<IHook>(
@@ -28,7 +33,12 @@ const hookSchema = new Schema<IHook>(
         status: { type: Number, default: 0 },
         positionState: { type: String, default: 'neutral' },
         tradeDirection: { type: String, enum: ["BOTH", "LONG_ONLY", "SHORT_ONLY"], default: "BOTH" },
-        isSubscribed: { type: Boolean, default: false }
+        isSubscribed: { type: Boolean, default: false },
+        leverage: { type: String },
+        entryPrice: { type: String },
+        stopLossPrice: { type: String },
+        takeProfitPrice: { type: String },
+        currentPrice: { type: String },
     },
     { timestamps: true }
 );

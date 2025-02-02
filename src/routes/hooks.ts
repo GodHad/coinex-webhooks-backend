@@ -45,6 +45,12 @@ router.post('/create', jwtAuth, async (req: JWTRequest, res) => {
             user.subscribeEndDate &&
             new Date(user.subscribeEndDate).getTime() > Date.now();
 
+            const hooks = await Hook.find({creator: userId});
+
+        if(!isSubscribed && hooks.length >= 1) {
+            return res.status(403).json({message: "You hit the limit of hooks. Please upgrade your subscription."});
+        }
+
         if (isUsingAdminHook && !isSubscribed) {
             return res.status(403).json({ message: 'You are not allowed this action' });
         }
@@ -176,12 +182,17 @@ router.get('/admin-hooks', jwtAuth, async (req: JWTRequest, res) => {
         const user = await User.findById(req.user?.userId);
 
         if (!user) return res.status(400).json({ message: 'User not found' });
-
-        const hooks = await AdminHook.find().select('-url');
+        let hooks = null;
+        if(user.isAdmin){
+            hooks = await AdminHook.find();
+        }
+        else{
+            hooks = await AdminHook.find().select('-url');
+        }
 
         const adminHookswithHook = await Promise.all(hooks.map(async hook => {
             try {
-                const userHook = await Hook.findOne({ adminHook: hook._id });
+                const userHook = await Hook.findOne({ adminHook: hook._id, creator: user._id });
 
                 if (!userHook) return { ...hook.toObject() };
                 return {

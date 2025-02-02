@@ -75,7 +75,7 @@ router.get('/', jwtAuth, async (req: JWTRequest, res) => {
 
         const histories = await History.find(_filter).populate('hook').skip(skip).limit(limit).sort({ createdAt: -1 });
         const totalHistory = await History.countDocuments(_filter);
-        
+
         const enrichedHistories = histories.map(history => {
             const hook = history.hook as { _id: Types.ObjectId; adminHook?: Types.ObjectId };
             const isAdminHook = hook?.adminHook ? true : false;

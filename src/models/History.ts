@@ -13,6 +13,7 @@ interface IHistory extends Document {
   error: any;
   positionState?: string;
   tradeDirection?: string;
+  isResended?: boolean;
   createdAt: Date;
 }
 
@@ -26,6 +27,7 @@ const HistorySchma = new mongoose.Schema({
   error: { type: mongoose.Schema.Types.Mixed },
   positionState: { type: String },
   tradeDirection: { type: String },
+  isResended: { type: Boolean },
 }, { timestamps: true });
 
 const History = mongoose.model('History', HistorySchma);

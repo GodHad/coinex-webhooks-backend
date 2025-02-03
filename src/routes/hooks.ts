@@ -45,10 +45,10 @@ router.post('/create', jwtAuth, async (req: JWTRequest, res) => {
             user.subscribeEndDate &&
             new Date(user.subscribeEndDate).getTime() > Date.now();
 
-            const hooks = await Hook.find({creator: userId});
+        const hooks = await Hook.find({ creator: userId });
 
-        if(!isSubscribed && hooks.length >= 1) {
-            return res.status(403).json({message: "You hit the limit of hooks. Please upgrade your subscription."});
+        if (!isSubscribed && hooks.length >= 1) {
+            return res.status(403).json({ message: "You hit the limit of hooks. Please upgrade your subscription." });
         }
 
         if (isUsingAdminHook && !isSubscribed) {
@@ -78,7 +78,7 @@ router.post('/create', jwtAuth, async (req: JWTRequest, res) => {
 
         await User.findByIdAndUpdate(
             userId,
-            { $set: { updatedAt: new Date() } }, 
+            { $set: { updatedAt: new Date() } },
             { new: true }
         );
 
@@ -143,7 +143,7 @@ router.put('/update/:id', jwtAuth, async (req: JWTRequest, res) => {
 
         await User.findByIdAndUpdate(
             userId,
-            { $set: { updatedAt: new Date() } }, 
+            { $set: { updatedAt: new Date() } },
             { new: true }
         );
 
@@ -167,7 +167,7 @@ router.delete('/:id', jwtAuth, async (req: JWTRequest, res) => {
         await Hook.findByIdAndDelete(id);
         await User.findByIdAndUpdate(
             userId,
-            { $set: { updatedAt: new Date() } }, 
+            { $set: { updatedAt: new Date() } },
             { new: true }
         );
         return res.status(200).json({ message: 'Delete successful' });
@@ -180,35 +180,71 @@ router.delete('/:id', jwtAuth, async (req: JWTRequest, res) => {
 router.get('/admin-hooks', jwtAuth, async (req: JWTRequest, res) => {
     try {
         const user = await User.findById(req.user?.userId);
-
+        console.log(user)
         if (!user) return res.status(400).json({ message: 'User not found' });
         let hooks = null;
-        if(user.isAdmin){
+        if (user.isAdmin) {
             hooks = await AdminHook.find();
         }
-        else{
+        else {
             hooks = await AdminHook.find().select('-url');
         }
 
         const adminHookswithHook = await Promise.all(hooks.map(async hook => {
             try {
                 const userHook = await Hook.findOne({ adminHook: hook._id, creator: user._id });
+        
+                const dependingHooks = await Hook.find({ adminHook: hook._id });
 
-                if (!userHook) return { ...hook.toObject() };
-                return {
-                    ...hook.toObject(),
-                    apiConfigured: true,
-                    hook: userHook
+                console.log(dependingHooks)
+                const histories = await History.find({ hook: { $in: dependingHooks.map(h => h._id) } });
+        
+                let totalWins = 0;
+                let totalPnl = 0;
+        
+                if (histories.length > 0) {
+                    totalPnl = histories.reduce((sum, history) => {
+                        if (history.data.data && history.data.data.realized_pnl !== undefined) {
+                            if (Number(history.data.data.realized_pnl) >= 0) totalWins++;
+                            return sum + parseFloat(history.data.data.realized_pnl);
+                        }
+                        return sum;
+                    }, 0);
+        
+                    const winRate = ((totalWins / histories.length) * 100).toFixed(2);
+                    const avgPnl = (totalPnl / histories.length).toFixed(2);
+        
+                    console.log("Total Wins:", totalWins, "Avg PNL:", avgPnl);
+        
+                    return {
+                        ...hook.toObject(),
+                        apiConfigured: true,
+                        hook: userHook,
+                        winRate,
+                        avgPnl,
+                        signals: dependingHooks.length
+                    };
+                } else {
+                    console.log("No histories found for hook:", hook._id);
+                    return {
+                        ...hook.toObject(),
+                        apiConfigured: true,
+                        hook: userHook,
+                        winRate: "0.00",
+                        avgPnl: "0.00",
+                        signals: dependingHooks.length
+                    };
                 }
             } catch (error) {
+                console.error("Error processing hook:", hook._id, error);
                 return { ...hook.toObject() };
             }
-        }))
-        
-        const userId=  req.user?.userId;
+        }));        
+
+        const userId = req.user?.userId;
         await User.findByIdAndUpdate(
             userId,
-            { $set: { updatedAt: new Date() } }, 
+            { $set: { updatedAt: new Date() } },
             { new: true }
         );
 

@@ -5,6 +5,7 @@ import AdminHook from '../models/AdminHook';
 import { v4 as uuidv4 } from 'uuid';
 import User from '../models/User';
 import Hook from '../models/Hook';
+import History from '../models/History';
 
 const router = express.Router();
 
@@ -37,7 +38,7 @@ router.get('/all-hooks', adminAuth, async (req, res) => {
 })
 
 router.post('/hooks/create', adminAuth, async (req: JWTRequest, res) => {
-    const { name, pair } = req.body;
+    const { name, pair, timeframe } = req.body;
     try {
         const userId = req.user?.userId;
 
@@ -47,6 +48,7 @@ router.post('/hooks/create', adminAuth, async (req: JWTRequest, res) => {
             name,
             pair,
             url,
+            timeframe,
             creator: userId,
         });
         await newHook.save();
@@ -67,13 +69,13 @@ router.post('/hooks/create', adminAuth, async (req: JWTRequest, res) => {
 });
 
 router.put('/hooks/update/:id', adminAuth, async (req: JWTRequest, res) => {
-    const { name, pair } = req.body;
+    const { name, pair, timeframe } = req.body;
     const id = req.params.id;
     const userId = req.user?.userId
 
 
     try {
-        const updatedHook = await AdminHook.findByIdAndUpdate(id, { name, pair }, { new: true });
+        const updatedHook = await AdminHook.findByIdAndUpdate(id, { name, pair, timeframe }, { new: true });
         await User.findByIdAndUpdate(
             userId,
             { $set: { updatedAt: new Date() } },
@@ -152,6 +154,36 @@ router.get('/overview', adminAuth, async (req: JWTRequest, res) => {
             return ((current - previous) / previous) * 100;
         };
 
+        const histories = await History.find();
+
+        const currentYear = now.getFullYear();
+        const currentMonth = now.getMonth() + 1; // JS months are 0-based, so add 1
+
+        const lastMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+        const lastMonthYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+
+        let currentMonthPnl = 0;
+        let lastMonthPnl = 0;
+
+        histories.forEach((history) => {
+            if (history.data && history.data.data && history.data.data.realized_pnl !== undefined) {
+                const date = new Date(history.createdAt);
+                const year = date.getFullYear();
+                const month = date.getMonth() + 1;
+
+                if (year === currentYear && month === currentMonth) {
+                    currentMonthPnl += parseFloat(history.data.data.realized_pnl);
+                } else if (year === lastMonthYear && month === lastMonth) {
+                    lastMonthPnl += parseFloat(history.data.data.realized_pnl);
+                }
+            }
+        });
+
+        let pnlRateChange = lastMonthPnl !== 0 
+            ? ((currentMonthPnl - lastMonthPnl) / Math.abs(lastMonthPnl)) * 100 
+            : (currentMonthPnl > 0 ? 100 : 0);
+
+
         return res.status(200).json({
             totalUsers,
             totalUsersChange: calculateRate(totalUsersCurrentMonth, totalUsersPreviousMonth),
@@ -159,6 +191,8 @@ router.get('/overview', adminAuth, async (req: JWTRequest, res) => {
             totalPremiumUsersChange: calculateRate(totalPremiumUsersCurrentMonth, totalPremiumUsersPreviousMonth),
             activeWebhooks,
             activeWebhooksChange: calculateRate(activeWebhooksCurrentMonth, activeWebhooksPreviousMonth),
+            currentMonthPnl,
+            pnlRateChange,
         });
     } catch (error) {
         console.error("Error while getting overview", error);

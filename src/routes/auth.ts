@@ -4,41 +4,36 @@ import User from '../models/User';
 import jwt from 'jsonwebtoken';
 import { jwtAuth } from '../middleware/authorization';
 import { JWTRequest } from '../types/JWTRequest';
+import { isValidUsername } from './admin';
 
 const router = express.Router();
 
-function isValidUsername(username: string) {
-    const usernameRegex = /^[a-z0-9]+$/;
-    return usernameRegex.test(username);
-}
-
 router.post('/register', async (req: Request, res: Response) => {
-    const { firstName, lastName, email, password } = req.body;
-    if (!isValidUsername(email)) {
-        return res.status(400).json({ message: 'Username can only contain lowercase letters and numbers, with no spaces.' });
-    }
+    const { email, password, inviteCode } = req.body;
     try {
-        const existingUser = await User.findOne({ email });
-        if (existingUser) {
-            return res.status(400).json({ message: 'User already exists' });
+        const user = await User.findOne({ email });
+        if (!user) {
+            return res.status(400).json({ message: 'You don\'t have the permission to access.' });
         }
 
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
+        if (user.status) return res.status(400).json({message: 'You already registered. Please login'});
 
-        const newUser = new User({
-            firstName,
-            lastName,
-            email,
-            password: hashedPassword
-        });
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ message: 'Password is incorrect' });
+        }
 
-        await newUser.save();
+        if (inviteCode !== user.inviteCode) return res.status(400).json({ message: 'Invite code is incorrect' });
 
+        user.status = 1;
 
-        res.status(201).json({
-            message: 'Add user successfully',
-            user: newUser
+        await user.save();
+        const token = jwt.sign({ userId: user._id }, 'secret', { expiresIn: '1h' });
+
+        res.status(200).json({
+            message: 'Register successful',
+            user: user,
+            token
         });
     } catch (error) {
         console.log("Failed to register user: ", error);
@@ -52,7 +47,7 @@ router.post('/login', async (req: Request, res: Response) => {
     try {
         const user = await User.findOne({ email });
         if (!user) {
-            return res.status(400).json({ message: 'Invalid credentials' });
+            return res.status(400).json({ message: 'Password is incorrect' });
         }
 
         const isMatch = await bcrypt.compare(password, user.password);

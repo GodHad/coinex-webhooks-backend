@@ -6,8 +6,14 @@ import { v4 as uuidv4 } from 'uuid';
 import User from '../models/User';
 import Hook from '../models/Hook';
 import History from '../models/History';
+import bcrypt from 'bcryptjs';
 
 const router = express.Router();
+
+export function isValidUsername(username: string) {
+    const usernameRegex = /^[a-z0-9]+$/;
+    return usernameRegex.test(username);
+}
 
 router.get('/hooks', jwtAuth, async (req: JWTRequest, res) => {
     try {
@@ -38,7 +44,7 @@ router.get('/all-hooks', adminAuth, async (req, res) => {
 })
 
 router.post('/hooks/create', adminAuth, async (req: JWTRequest, res) => {
-    const { name, pair, timeframe } = req.body;
+    const { name, pair, timeframe, riskLevel } = req.body;
     try {
         const userId = req.user?.userId;
 
@@ -49,6 +55,7 @@ router.post('/hooks/create', adminAuth, async (req: JWTRequest, res) => {
             pair,
             url,
             timeframe,
+            riskLevel,
             creator: userId,
         });
         await newHook.save();
@@ -69,13 +76,12 @@ router.post('/hooks/create', adminAuth, async (req: JWTRequest, res) => {
 });
 
 router.put('/hooks/update/:id', adminAuth, async (req: JWTRequest, res) => {
-    const { name, pair, timeframe } = req.body;
+    const { name, pair, timeframe, riskLevel } = req.body;
     const id = req.params.id;
     const userId = req.user?.userId
 
-
     try {
-        const updatedHook = await AdminHook.findByIdAndUpdate(id, { name, pair, timeframe }, { new: true });
+        const updatedHook = await AdminHook.findByIdAndUpdate(id, { name, pair, timeframe, riskLevel }, { new: true });
         await User.findByIdAndUpdate(
             userId,
             { $set: { updatedAt: new Date() } },
@@ -197,6 +203,42 @@ router.get('/overview', adminAuth, async (req: JWTRequest, res) => {
     } catch (error) {
         console.error("Error while getting overview", error);
         return res.status(500).json({ message: 'Server error' });
+    }
+})
+
+router.post('/add-user', adminAuth, async (req, res) => {
+    const { firstName, lastName, email, password } = req.body;
+    if (!isValidUsername(email)) {
+        return res.status(400).json({ message: 'Username can only contain lowercase letters and numbers, with no spaces.' });
+    }
+    try {
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+            return res.status(400).json({ message: 'User already exists' });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+        const inviteCode = Math.floor(1000 + Math.random() * 9000).toString(); 
+
+        const newUser = new User({
+            firstName,
+            lastName,
+            email,
+            password: hashedPassword,
+            inviteCode
+        });
+
+        await newUser.save();
+
+
+        res.status(201).json({
+            message: 'Add user successfully',
+            user: newUser
+        });
+    } catch (error) {
+        console.log("Failed to register user: ", error);
+        res.status(500).json({ message: 'Server error' });
     }
 })
 

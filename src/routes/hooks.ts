@@ -216,13 +216,22 @@ router.get('/admin-hooks', jwtAuth, async (req: JWTRequest, res) => {
         
                     console.log("Total Wins:", totalWins, "Avg PNL:", avgPnl);
         
+                    const total24 = await History.countDocuments({
+                        hook: { $in: dependingHooks.map(h => h._id) },
+                        createdAt: {
+                            $gt: new Date(Date.now() - 24 * 60 * 60 * 1000),  // 24 hours ago
+                            $lt: new Date()  // Now
+                        }
+                    });                    
+
                     return {
                         ...hook.toObject(),
                         apiConfigured: true,
                         hook: userHook,
                         winRate,
                         avgPnl,
-                        signals: dependingHooks.length
+                        signals: dependingHooks.length,
+                        total24,
                     };
                 } else {
                     console.log("No histories found for hook:", hook._id);
@@ -232,7 +241,8 @@ router.get('/admin-hooks', jwtAuth, async (req: JWTRequest, res) => {
                         hook: userHook,
                         winRate: "0.00",
                         avgPnl: "0.00",
-                        signals: dependingHooks.length
+                        signals: dependingHooks.length,
+                        total24: 0
                     };
                 }
             } catch (error) {

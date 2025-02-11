@@ -5,6 +5,7 @@ import AdminHook from '../models/AdminHook';
 import { v4 as uuidv4 } from 'uuid';
 import User from '../models/User';
 import Hook from '../models/Hook';
+import AdminData from '../models/AdminData';
 import History from '../models/History';
 import bcrypt from 'bcryptjs';
 
@@ -44,19 +45,24 @@ router.get('/all-hooks', adminAuth, async (req, res) => {
 })
 
 router.post('/hooks/create', adminAuth, async (req: JWTRequest, res) => {
-    const { name, pair, timeframe, riskLevel } = req.body;
+    const { pair, timeframe, riskLevel, imageUrl, recommendedLeverage, description } = req.body;
     try {
+        console.log(req.body)
         const userId = req.user?.userId;
 
         const url = uuidv4();
 
         const newHook = new AdminHook({
-            name,
+            name: timeframe + ' ' + pair,
             pair,
             url,
             timeframe,
             riskLevel,
             creator: userId,
+            enabled: true,
+            imageUrl,
+            description,
+            recommendedLeverage
         });
         await newHook.save();
 
@@ -67,7 +73,7 @@ router.post('/hooks/create', adminAuth, async (req: JWTRequest, res) => {
         );
         return res.status(200).json({
             message: 'Create new hook successful',
-            hook: newHook
+            hook: { ...newHook.toObject(), signals: 0 }
         })
     } catch (error) {
         console.error("Error during creating hook:", error);
@@ -76,12 +82,14 @@ router.post('/hooks/create', adminAuth, async (req: JWTRequest, res) => {
 });
 
 router.put('/hooks/update/:id', adminAuth, async (req: JWTRequest, res) => {
-    const { name, pair, timeframe, riskLevel } = req.body;
+    const { pair, timeframe, riskLevel, enabled, imageUrl, recommendedLeverage, description } = req.body;
     const id = req.params.id;
     const userId = req.user?.userId
 
     try {
-        const updatedHook = await AdminHook.findByIdAndUpdate(id, { name, pair, timeframe, riskLevel }, { new: true });
+        const dependingHooks = await Hook.find({ adminHook: id });
+
+        const updatedHook = await AdminHook.findByIdAndUpdate(id, { name: timeframe + ' ' + pair, pair, timeframe, riskLevel, enabled, imageUrl, recommendedLeverage, description }, { new: true });
         await User.findByIdAndUpdate(
             userId,
             { $set: { updatedAt: new Date() } },
@@ -89,7 +97,7 @@ router.put('/hooks/update/:id', adminAuth, async (req: JWTRequest, res) => {
         );
         return res.status(200).json({
             message: 'Update hook successful',
-            hook: updatedHook
+            hook: { ...updatedHook?.toObject(), signals: dependingHooks.length },
         });
     } catch (error) {
         console.error("Error during updating hook: ", error);
@@ -185,8 +193,8 @@ router.get('/overview', adminAuth, async (req: JWTRequest, res) => {
             }
         });
 
-        let pnlRateChange = lastMonthPnl !== 0 
-            ? ((currentMonthPnl - lastMonthPnl) / Math.abs(lastMonthPnl)) * 100 
+        let pnlRateChange = lastMonthPnl !== 0
+            ? ((currentMonthPnl - lastMonthPnl) / Math.abs(lastMonthPnl)) * 100
             : (currentMonthPnl > 0 ? 100 : 0);
 
 
@@ -219,7 +227,7 @@ router.post('/add-user', adminAuth, async (req, res) => {
 
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
-        const inviteCode = Math.floor(1000 + Math.random() * 9000).toString(); 
+        const inviteCode = Math.floor(1000 + Math.random() * 9000).toString();
 
         const newUser = new User({
             firstName,
@@ -239,6 +247,52 @@ router.post('/add-user', adminAuth, async (req, res) => {
     } catch (error) {
         console.log("Failed to register user: ", error);
         res.status(500).json({ message: 'Server error' });
+    }
+})
+
+router.get('/admin-data', adminAuth, async (req, res) => {
+    try{
+        const data = await AdminData.findOne();
+        res.status(200).json({
+            'message': 'Get Admin Data successful',
+            data
+        });
+    } catch (error) {
+        console.error("Error during updating adminData: ", error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+})
+
+router.post('/update-admin-data', adminAuth, async (req, res) => {
+    try{
+        const {twitter, instagram, discord, telegram, favicon, pageTitle,sidebarTitle, mainTitle, subTitle,features,maintainanceMode,allowSignup,inviteCodes} = req.body;
+        const data = await AdminData.findOneAndUpdate({}, {
+            twitter, 
+            instagram,
+            discord,
+            telegram,
+            favicon,
+            pageTitle,
+            sidebarTitle,
+            mainTitle,
+            subTitle,
+            featuredCardTitle:features[0].title,
+            featuredCardDescription:features[0].description,
+            featuredCardTitle1:features[1].title,
+            featuredCardDescription1:features[1].description,
+            featuredCardTitle2:features[2].title,
+            featuredCardDescription2:features[2].description,
+            maintainanceMode,
+            allowSignup,
+            inviteCodes
+        }, {new: true});
+        res.status(200).json({
+            message: 'Update Admin Data successful',
+            data
+        })
+    } catch (error) {
+        console.error("Error during updating adminData: ", error);
+        return res.status(500).json({ message: 'Server error' });
     }
 })
 

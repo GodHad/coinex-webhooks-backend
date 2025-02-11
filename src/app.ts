@@ -6,7 +6,7 @@ import authRoutes from './routes/auth';
 import hooksRoutes from './routes/hooks';
 import webhooksRoutes from './routes/webhooks';
 import historyRoutes from './routes/histories';
-import userRoutes from './routes/user';
+import userRoutes from './routes/users';
 import adminRoutes from './routes/admin';
 
 const app = express();

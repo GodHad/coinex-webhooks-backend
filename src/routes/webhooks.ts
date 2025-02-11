@@ -321,7 +321,7 @@ router.get('/resend/:id', jwtAuth, async (req, res) => {
                 return res.status(500).json({ message: result.message });
             }
 
-            return res.status(200).json({ message: result.message });
+            return res.status(200).json({ message: 'Resend successful' });
         } else {
             return res.status(400).json({ message: 'Not found' });
         }

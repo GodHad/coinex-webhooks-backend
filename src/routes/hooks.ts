@@ -211,8 +211,8 @@ router.get('/admin-hooks', jwtAuth, async (req: JWTRequest, res) => {
                         return sum;
                     }, 0);
         
-                    const winRate = ((totalWins / histories.length) * 100).toFixed(2);
-                    const avgPnl = (totalPnl / histories.length).toFixed(2);
+                    const winRate = (totalWins / histories.length) * 100;
+                    const avgPnl = totalPnl / histories.length;
         
                     console.log("Total Wins:", totalWins, "Avg PNL:", avgPnl);
         
@@ -239,8 +239,8 @@ router.get('/admin-hooks', jwtAuth, async (req: JWTRequest, res) => {
                         ...hook.toObject(),
                         apiConfigured: true,
                         hook: userHook,
-                        winRate: "0.00",
-                        avgPnl: "0.00",
+                        winRate: 0,
+                        avgPnl: 0,
                         signals: dependingHooks.length,
                         total24: 0
                     };

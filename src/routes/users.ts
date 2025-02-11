@@ -4,6 +4,7 @@ import User from '../models/User';
 import Hook from '../models/Hook';
 import History from '../models/History';
 import { JWTRequest } from '../types/JWTRequest';
+import AdminData from '../models/AdminData';
 
 const router = express.Router();
 
@@ -92,5 +93,33 @@ router.get('/get-overview', jwtAuth, async (req: JWTRequest, res) => {
         return res.status(500).json({ error: "Internal server error" });
     }
 });
+
+router.get('/homepage', async (req, res) => {
+    try {
+        const adminData = await AdminData.findOne({}, 'mainTitle subTitle featuredCardTitle featuredCardDescription featuredCardTitle1 featuredCardDescription1 featuredCardTitle2 featuredCardDescription2');
+        console.log("homepage", adminData)
+        return res.status(200).json({
+            data: adminData,
+            message: 'Get Homepage data successful',
+        })
+    } catch (error) {
+        console.error("Error updating subscribe", error);
+        return res.status(500).json({ message: 'Server Error' });
+    }
+});
+
+router.get('/social-links', async (req, res) => {
+    try {
+        const adminData = await AdminData.findOne({}, 'twitter telegram discord instagram');
+        console.log("social-links", adminData)
+        return res.status(200).json({
+            data: adminData,
+            message: 'Get social links successful',
+        })
+    } catch (error) {
+        console.error("Error updating subscribe", error);
+        return res.status(500).json({ message: 'Server Error' });
+    }
+})
 
 export default router;

@@ -9,8 +9,10 @@ const adminHookSchema = new mongoose.Schema(
         url: { type: String, required: true },
         timeframe: { type: String },
         description: { type: String },
+        imageUrl: { type: String, required: true },
         riskLevel: { type: String, enum: ['High', 'Medium', ' Low'] },
         recommendedLeverage: { type: String },
+        enabled: { type: Boolean, required: true },
     },
     { timestamps: true }
 );

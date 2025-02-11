@@ -251,7 +251,7 @@ router.post('/add-user', adminAuth, async (req, res) => {
 })
 
 router.get('/admin-data', adminAuth, async (req, res) => {
-    try{
+    try {
         const data = await AdminData.findOne();
         res.status(200).json({
             'message': 'Get Admin Data successful',
@@ -264,10 +264,10 @@ router.get('/admin-data', adminAuth, async (req, res) => {
 })
 
 router.post('/update-admin-data', adminAuth, async (req, res) => {
-    try{
-        const {twitter, instagram, discord, telegram, favicon, pageTitle,sidebarTitle, mainTitle, subTitle,features,maintainanceMode,allowSignup,inviteCodes} = req.body;
+    try {
+        const { twitter, instagram, discord, telegram, favicon, pageTitle, sidebarTitle, mainTitle, subTitle, features, maintainanceMode, allowSignup } = req.body;
         const data = await AdminData.findOneAndUpdate({}, {
-            twitter, 
+            twitter,
             instagram,
             discord,
             telegram,
@@ -276,16 +276,16 @@ router.post('/update-admin-data', adminAuth, async (req, res) => {
             sidebarTitle,
             mainTitle,
             subTitle,
-            featuredCardTitle:features[0].title,
-            featuredCardDescription:features[0].description,
-            featuredCardTitle1:features[1].title,
-            featuredCardDescription1:features[1].description,
-            featuredCardTitle2:features[2].title,
-            featuredCardDescription2:features[2].description,
+            featuredCardTitle: features[0].title,
+            featuredCardDescription: features[0].description,
+            featuredCardTitle1: features[1].title,
+            featuredCardDescription1: features[1].description,
+            featuredCardTitle2: features[2].title,
+            featuredCardDescription2: features[2].description,
             maintainanceMode,
             allowSignup,
-            inviteCodes
-        }, {new: true});
+            // inviteCodes
+        }, { new: true });
         res.status(200).json({
             message: 'Update Admin Data successful',
             data

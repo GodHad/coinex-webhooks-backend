@@ -20,7 +20,7 @@ const adminDataSchema = new mongoose.Schema(
         discord: { type: String },
         maintainanceMode: { type: Boolean, required: true },
         allowSignup: { type: Boolean, required: true },
-        inviteCodes:{type: Array}
+        // inviteCodes:{type: Array}
     },
     { timestamps: true }
 );

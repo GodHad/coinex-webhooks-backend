@@ -12,7 +12,7 @@ export const init = () => {
     .connect(DB_CONNECTION)
     .then(async (v) => {
       console.log(`mongodb database connected`);
-      await AdminData.findOneAndUpdate({}, {
+      await AdminData.create({
         twitter: 'https://twitter.com/TwitterWebHookPro',
         telegram: 'https://t.me/WebHookPro',
         discord: 'https://discord.gg/WebHookPro',

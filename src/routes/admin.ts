@@ -197,7 +197,16 @@ router.get('/overview', adminAuth, async (req: JWTRequest, res) => {
             ? ((currentMonthPnl - lastMonthPnl) / Math.abs(lastMonthPnl)) * 100
             : (currentMonthPnl > 0 ? 100 : 0);
 
-
+        console.log('overview', {
+            totalUsers,
+            totalUsersChange: calculateRate(totalUsersCurrentMonth, totalUsersPreviousMonth),
+            totalPremiumUsers,
+            totalPremiumUsersChange: calculateRate(totalPremiumUsersCurrentMonth, totalPremiumUsersPreviousMonth),
+            activeWebhooks,
+            activeWebhooksChange: calculateRate(activeWebhooksCurrentMonth, activeWebhooksPreviousMonth),
+            currentMonthPnl,
+            pnlRateChange,
+        })
         return res.status(200).json({
             totalUsers,
             totalUsersChange: calculateRate(totalUsersCurrentMonth, totalUsersPreviousMonth),

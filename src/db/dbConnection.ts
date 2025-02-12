@@ -12,10 +12,10 @@ export const init = () => {
     .connect(DB_CONNECTION)
     .then(async (v) => {
       console.log(`mongodb database connected`);
-      await AdminData.findOneAndUpdate({},{
-        siteMaintainanceMode: false,
-        webhooksMaintainanceMode: false,
-      })
+      // await AdminData.findOneAndUpdate({},{
+      //   siteMaintainanceMode: false,
+      //   webhooksMaintainanceMode: false,
+      // })
     })
     .catch((e) => {
       console.error(`mongodb error ${e}`);

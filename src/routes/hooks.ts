@@ -6,11 +6,11 @@ import User from '../models/User';
 import { v4 as uuidv4 } from 'uuid';
 import AdminHook from '../models/AdminHook';
 import History from '../models/History';
-import maintenanceMiddleware from '../middleware/maintainance';
+import siteMaintenanceMiddleware from '../middleware/siteMaintainance';
 
 const router = express.Router();
 
-router.get('/', jwtAuth, maintenanceMiddleware, async (req: JWTRequest, res) => {
+router.get('/', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRequest, res) => {
     try {
         const userId = req.user?.userId;
         const hooks = await Hook.find({ creator: userId }).populate('adminHook');
@@ -30,7 +30,7 @@ router.get('/', jwtAuth, maintenanceMiddleware, async (req: JWTRequest, res) => 
     }
 });
 
-router.post('/create', jwtAuth, maintenanceMiddleware, async (req: JWTRequest, res) => {
+router.post('/create', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRequest, res) => {
     const { coinExApiKey, coinExApiSecret, name, tradeDirection, isUsingAdminHook } = req.body;
 
     try {
@@ -96,7 +96,7 @@ router.post('/create', jwtAuth, maintenanceMiddleware, async (req: JWTRequest, r
 });
 
 
-router.put('/update/:id', jwtAuth, maintenanceMiddleware, async (req: JWTRequest, res) => {
+router.put('/update/:id', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRequest, res) => {
     const { coinExApiKey, coinExApiSecret, name, status, tradeDirection, isUsingAdminHook } = req.body;
     const { id } = req.params;
 
@@ -160,7 +160,7 @@ router.put('/update/:id', jwtAuth, maintenanceMiddleware, async (req: JWTRequest
     }
 });
 
-router.delete('/:id', jwtAuth, maintenanceMiddleware, async (req: JWTRequest, res) => {
+router.delete('/:id', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRequest, res) => {
     const id = req.params.id;
     const userId = req.user?.userId
 
@@ -178,7 +178,7 @@ router.delete('/:id', jwtAuth, maintenanceMiddleware, async (req: JWTRequest, re
     }
 })
 
-router.get('/admin-hooks', jwtAuth, maintenanceMiddleware, async (req: JWTRequest, res) => {
+router.get('/admin-hooks', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRequest, res) => {
     try {
         const user = await User.findById(req.user?.userId);
         console.log(user)

@@ -275,7 +275,7 @@ router.get('/admin-data', adminAuth, async (req, res) => {
 
 router.post('/update-admin-data', adminAuth, async (req, res) => {
     try {
-        const { twitter, instagram, discord, telegram, favicon, pageTitle, sidebarTitle, mainTitle, subTitle, features, maintainanceMode, allowSignup } = req.body;
+        const { twitter, instagram, discord, telegram, favicon, pageTitle, sidebarTitle, mainTitle, subTitle, features, siteMaintainanceMode, webhooksMaintainanceMode, allowSignup } = req.body;
         const data = await AdminData.findOneAndUpdate({}, {
             twitter,
             instagram,
@@ -292,7 +292,8 @@ router.post('/update-admin-data', adminAuth, async (req, res) => {
             featuredCardDescription1: features[1].description,
             featuredCardTitle2: features[2].title,
             featuredCardDescription2: features[2].description,
-            maintainanceMode,
+            siteMaintainanceMode,
+            webhooksMaintainanceMode,
             allowSignup,
             // inviteCodes
         }, { new: true });

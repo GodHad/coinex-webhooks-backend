@@ -18,7 +18,8 @@ const adminDataSchema = new mongoose.Schema(
         telegram: { type: String },
         instagram: { type: String },
         discord: { type: String },
-        maintainanceMode: { type: Boolean, required: true },
+        siteMaintainanceMode: { type: Boolean, required: true },
+        webhooksMaintainanceMode: { type: Boolean, required: true },
         allowSignup: { type: Boolean, required: true },
         // inviteCodes:{type: Array}
     },

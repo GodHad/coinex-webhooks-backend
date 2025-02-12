@@ -1,11 +1,11 @@
 import { NextFunction, Request, Response } from "express";
 import AdminData from "../models/AdminData";
 
-const maintenanceMiddleware = async (req: Request, res: Response, next: NextFunction) => {
+const siteMaintenanceMiddleware = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const adminData = await AdminData.findOne();
 
-        if (!adminData || adminData.maintainanceMode) {
+        if (!adminData || adminData.siteMaintainanceMode) {
             return res.status(503).json({
                 success: false,
                 message: "The site is currently under maintenance. Please try again later.",
@@ -19,4 +19,4 @@ const maintenanceMiddleware = async (req: Request, res: Response, next: NextFunc
     }
 };
 
-export default maintenanceMiddleware;
+export default siteMaintenanceMiddleware;

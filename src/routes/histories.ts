@@ -5,11 +5,11 @@ import { JWTRequest } from '../types/JWTRequest';
 import Hook from '../models/Hook';
 import User from '../models/User';
 import { Types } from 'mongoose';
-import maintenanceMiddleware from '../middleware/maintainance';
+import siteMaintenanceMiddleware from '../middleware/siteMaintainance';
 
 const router = express.Router();
 
-router.get('/', jwtAuth, maintenanceMiddleware, async (req: JWTRequest, res) => {
+router.get('/', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRequest, res) => {
     const userId = req.user?.userId;
     try {
         const user = await User.findById(userId);

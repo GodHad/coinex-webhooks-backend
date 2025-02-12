@@ -122,4 +122,31 @@ router.get('/social-links', async (req, res) => {
     }
 })
 
+router.get('/get-sidebar-title', async (req, res) => {
+    try {
+        const adminData = await AdminData.findOne({}, 'sidebarTitle');
+        console.log(adminData)
+        return res.status(200).json({
+            sidebarTitle: adminData ? adminData.sidebarTitle : 'Webhook Manager',
+            message: 'Get sidebar title successful',
+        })
+    } catch (error) {
+        console.error("Error updating subscribe", error);
+        return res.status(500).json({ message: 'Server Error' });
+    }
+})
+
+router.get('/get-page-data', async (req, res) => {
+    try {
+        const adminData = await AdminData.findOne({}, 'favicon pageTitle');
+        return res.status(200).json({
+            data: adminData,
+            message: 'Get page data successful',
+        })
+    } catch (error) {
+        console.error("Error updating subscribe", error);
+        return res.status(500).json({ message: 'Server Error' });
+    }
+})
+
 export default router;

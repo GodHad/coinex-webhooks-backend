@@ -4,7 +4,7 @@ import mongoose from 'mongoose';
 const exchangePartnerSchema = new mongoose.Schema(
     {
         name: { type: String, required: true },
-        logoUrl: { type: String, required: true },
+        logo: { type: String, required: true },
         description: { type: String, required: true },
         rating: { type: Number, required: true },
         pros: [{ type: String, required: true }],
@@ -16,7 +16,8 @@ const exchangePartnerSchema = new mongoose.Schema(
         leverage: { type: String },
         minDeposit: { type: String },
         assets: { type: String },
-        comingSoon: { type: Boolean, required: true }
+        enabled: { type: Boolean, required: true },
+        affiliateLink: { type: String, required: true }
     },
     { timestamps: true }
 );

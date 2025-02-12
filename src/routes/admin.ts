@@ -8,6 +8,7 @@ import Hook from '../models/Hook';
 import AdminData from '../models/AdminData';
 import History from '../models/History';
 import bcrypt from 'bcryptjs';
+import ExchangePartner from '../models/ExchangePartner';
 
 const router = express.Router();
 
@@ -301,6 +302,113 @@ router.post('/update-admin-data', adminAuth, async (req, res) => {
         })
     } catch (error) {
         console.error("Error during updating adminData: ", error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+})
+
+router.get('/exchanges', adminAuth, async (req, res) => {
+    try {
+        const data = await ExchangePartner.find();
+        res.status(200).json({
+            'message': 'Get Admin Data successful',
+            data
+        });
+    } catch (error) {
+        console.error("Error during updating adminData: ", error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+})
+
+router.post('/add-exchange', adminAuth, async (req, res) => {
+    try {
+        const { name, logo, description, pros, cons, rating, tradingFee, leverage, minDeposit, assets, enabled, affiliateLink } = req.body;
+
+        console.log(req.body);
+
+        // Create new ExchangePartner entry
+        const newExchange = new ExchangePartner({
+            name,
+            logo,
+            description,
+            pros, // Fix: "props" should be "pros"
+            cons,
+            rating,
+            tradingFee,
+            leverage,
+            minDeposit,
+            assets,
+            enabled,
+            affiliateLink
+        });
+
+        // Save to database
+        const savedExchange = await newExchange.save();
+
+        res.status(201).json({
+            message: 'Exchange Data added successfully',
+            data: savedExchange
+        });
+    } catch (error) {
+        console.error("Error during adding Exchange: ", error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+})
+
+router.post('/update-exchange', adminAuth, async (req, res) => {
+    try {
+        const {_id, name, logo, description, pros, cons, rating, tradingFee, leverage, minDeposit, assets, enabled, affiliateLink } = req.body;
+
+        console.log(req.body);
+
+        // Create new ExchangePartner entry
+        const data = await ExchangePartner.findOneAndUpdate({_id}, {
+            name,
+            logo,
+            description,
+            pros, // Fix: "props" should be "pros"
+            cons,
+            rating,
+            tradingFee,
+            leverage,
+            minDeposit,
+            assets,
+            enabled,
+            affiliateLink
+        }, { new: true });
+        res.status(200).json({
+            message: 'Update Admin Data successful',
+            data
+        })
+    } catch (error) {
+        console.error("Error during adding Exchange: ", error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+})
+
+router.delete('/delete-exchange/:id', adminAuth, async (req, res) => {
+    const _id = req.params.id;
+    try {
+        await ExchangePartner.findByIdAndDelete(_id);
+        return res.status(200).json({ message: 'Delete successful' });
+    } catch (error) {
+        console.error("Error during deleting hook: ", error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
+router.post('/toggle-exchange/:id', adminAuth, async (req, res) => {
+    const _id = req.params.id;
+    try {
+        const exchange = await ExchangePartner.findById(_id);
+        if (exchange) {
+            exchange.enabled = !exchange.enabled;
+            await exchange.save();
+            return res.status(200).json({ message: 'Delete successful' });
+        } 
+        
+        return res.status(400).json({ message: 'Can\'t find exchange partner' });
+    } catch (error) {
+        console.error("Error during deleting hook: ", error);
         return res.status(500).json({ message: 'Server error' });
     }
 })

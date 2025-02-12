@@ -6,6 +6,7 @@ import axios from 'axios';
 import User, { IUser } from '../models/User';
 import AdminHook from '../models/AdminHook';
 import { jwtAuth } from '../middleware/authorization';
+import maintenanceMiddleware from '../middleware/maintainance';
 
 const router = express.Router();
 const url = 'https://api.coinex.com/v2/futures/order';
@@ -206,7 +207,7 @@ const handleTrade = async (
     return { success: true, message: 'Order placed successfully' };
 };
 
-router.post('/:webhookUrl', async (req, res) => {
+router.post('/:webhookUrl', maintenanceMiddleware, async (req, res) => {
     try {
         const { webhookUrl } = req.params;
         const { ticker, action, amount, exchange } = req.body;
@@ -280,7 +281,7 @@ router.post('/:webhookUrl', async (req, res) => {
 });
 
 
-router.post('/:username/:webhookUrl', async (req, res) => {
+router.post('/:username/:webhookUrl', maintenanceMiddleware, async (req, res) => {
     try {
         const { username, webhookUrl } = req.params;
         const { ticker, action, amount, exchange } = req.body;
@@ -308,7 +309,7 @@ router.post('/:username/:webhookUrl', async (req, res) => {
 });
 
 
-router.get('/resend/:id', jwtAuth, async (req, res) => {
+router.get('/resend/:id', jwtAuth, maintenanceMiddleware, async (req, res) => {
     const id = req.params.id;
 
     try {

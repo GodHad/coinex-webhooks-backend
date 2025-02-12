@@ -5,10 +5,11 @@ import jwt from 'jsonwebtoken';
 import { jwtAuth } from '../middleware/authorization';
 import { JWTRequest } from '../types/JWTRequest';
 import { isValidUsername } from './admin';
+import maintenanceMiddleware from '../middleware/maintainance';
 
 const router = express.Router();
 
-router.post('/register', async (req: Request, res: Response) => {
+router.post('/register', maintenanceMiddleware, async (req: Request, res: Response) => {
     const { email, password, inviteCode } = req.body;
     try {
         const user = await User.findOne({ email });
@@ -91,7 +92,7 @@ router.get('/login-with-jwt', jwtAuth, async (req: JWTRequest, res) => {
     }
 });
 
-router.post('/update-user', jwtAuth, async (req: JWTRequest, res) => {
+router.post('/update-user', jwtAuth, maintenanceMiddleware, async (req: JWTRequest, res) => {
     const { firstName, lastName, email, password } = req.body;
     try {
         const user = await User.findById(req.user?.userId);

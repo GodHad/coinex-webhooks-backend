@@ -6,6 +6,7 @@ import { jwtAuth } from '../middleware/authorization';
 import { JWTRequest } from '../types/JWTRequest';
 import { isValidUsername } from './admin';
 import siteMaintenanceMiddleware from '../middleware/siteMaintainance';
+import AdminData from '../models/AdminData';
 
 const router = express.Router();
 
@@ -52,6 +53,9 @@ router.post('/login', async (req: Request, res: Response) => {
         }
 
         if (!user.status) return res.status(400).json({message: 'Please request access to login'});
+        const adminData = await AdminData.findOne();
+
+        if (adminData?.siteMaintainanceMode && !user.isAdmin) return res.status(400).json({message: 'Site is currently in maintenance. Please try again later'})
 
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
@@ -71,7 +75,7 @@ router.post('/login', async (req: Request, res: Response) => {
     }
 });
 
-router.get('/login-with-jwt', jwtAuth, async (req: JWTRequest, res) => {
+router.get('/login-with-jwt', siteMaintenanceMiddleware, jwtAuth, async (req: JWTRequest, res) => {
     const userId = req.user?.userId;
 
     try {

@@ -96,7 +96,7 @@ router.get('/get-overview', jwtAuth, async (req: JWTRequest, res) => {
 
 router.get('/homepage', async (req, res) => {
     try {
-        const adminData = await AdminData.findOne({}, 'mainTitle subTitle featuredCardTitle featuredCardDescription featuredCardTitle1 featuredCardDescription1 featuredCardTitle2 featuredCardDescription2');
+        const adminData = await AdminData.findOne({}, 'mainTitle subTitle featuredCardTitle featuredCardDescription featuredCardTitle1 featuredCardDescription1 featuredCardTitle2 featuredCardDescription2 siteMaintainanceMode');
         console.log("homepage", adminData)
         return res.status(200).json({
             data: adminData,

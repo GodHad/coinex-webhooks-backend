@@ -7,6 +7,9 @@ import User, { IUser } from '../models/User';
 import AdminHook from '../models/AdminHook';
 import { jwtAuth } from '../middleware/authorization';
 import webhooksMaintenanceMiddleware from '../middleware/webhooksMaintenance';
+import ArtemHistory from '../models/Artem';
+
+require("dotenv").config("../.env");
 
 const router = express.Router();
 const url = 'https://api.coinex.com/v2/futures/order';
@@ -280,6 +283,78 @@ router.post('/:webhookUrl', webhooksMaintenanceMiddleware, async (req, res) => {
     }
 });
 
+async function getTimestamp() {
+    // curl "https://api.bitget.com/api/v2/public/time"
+    const requestTime = (await axios.get('https://api.bitget.com/api/v2/public/time')).data.data.serverTime;
+    return requestTime;
+}
+
+function sign(message: string, secretKey: string) {
+    const hmac = crypto.createHmac("sha256", secretKey);
+    hmac.update(message);
+    return Buffer.from(hmac.digest()).toString("base64");
+}
+
+function preHash(timestamp: string, method: string, requestPath: string, body: string) {
+    return `${timestamp}${method.toUpperCase()}${requestPath}${body}`;
+}
+
+interface Params {
+    [key: string]: string | number | boolean;
+}
+
+function parseParamsToStr(params: Params): string {
+    const sortedParams = Object.entries(params).sort(([a], [b]) => a.localeCompare(b));
+    const queryString = toQueryWithNoEncode(sortedParams);
+    return queryString ? `?${queryString}` : "";
+}
+
+function toQueryWithNoEncode(params: [string, string | number | boolean][]): string {
+    return params.map(([key, value]) => `${key}=${value}`).join("&");
+}
+
+const apiKey = process.env.API_KEY;
+const apiPass = process.env.API_PASS;
+const apiSecret = process.env.API_SECRET;
+
+
+// curl "https://api.bitget.com/api/v2/mix/account/account?symbol=btcusdt&productType=USDT-FUTURES&marginCoin=usdt" \
+//    -H "ACCESS-KEY:*******" \
+//    -H "ACCESS-SIGN:*" \
+//    -H "ACCESS-PASSPHRASE:*" \
+//    -H "ACCESS-TIMESTAMP:1659076670000" \
+//    -H "locale:en-US" \
+//    -H "Content-Type: application/json" 
+
+router.post('/artem/bitget', async (req, res) => {
+    try {
+        const { coinpair, action, size } = req.body;
+        // let requestPath = "api/v2/mix/order/place-order/";
+        // const postParams = { symbol, marginCoin, productType: 'usdt-futures', side: action, size };
+        // const postBody = JSON.stringify(postParams);
+        // const timestamp = await getTimestamp();
+        // const postSign = sign(preHash(timestamp, "POST", requestPath, postBody), apiSecret || '');
+        // const result = await axios.post(`https:/api.bitget.com${requestPath}`, postParams, {
+        //     headers: {
+        //         'ACCESS-KEY': apiKey,
+        //         'ACCESS-PASSPHRASE': apiPass,
+        //         'ACCESS-SIGN': postSign,
+        //         'ACCESS-TIMESTAMP': timestamp
+        //     }
+        // })
+        // console.log(result)
+        const newHistory = new ArtemHistory({
+            coinpair,
+            action,
+            size
+        })
+        await newHistory.save();
+        return res.status(200).json({ message: 'success' });
+    } catch (error) {
+        console.error('Error during webhook handling:', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+})
 
 router.post('/:username/:webhookUrl', webhooksMaintenanceMiddleware, async (req, res) => {
     try {
@@ -330,6 +405,6 @@ router.get('/resend/:id', jwtAuth, webhooksMaintenanceMiddleware, async (req, re
         console.error(error);
         return res.status(500).json({ message: 'Server error' });
     }
-})
+});
 
 export default router;

@@ -342,7 +342,7 @@ router.post('/artem/bitget', async (req, res) => {
         //         'ACCESS-TIMESTAMP': timestamp
         //     }
         // })
-        // console.log(result)
+        console.log(coinpair, action, size, 'artem')
         const newHistory = new ArtemHistory({
             coinpair,
             action,

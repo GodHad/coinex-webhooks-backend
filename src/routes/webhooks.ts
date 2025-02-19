@@ -101,34 +101,45 @@ const apiSecret = process.env.API_SECRET;
 //    -H "locale:en-US" \
 //    -H "Content-Type: application/json" 
 
+let apiCount = 0, tradeDir = 'plus', isClosed = false;
+
 router.post('/artem/bitget', async (req, res) => {
     try {
         const { coinpair, action, size } = req.body;
 
-        let requestPath = "api/v2/mix/order/place-order/";
+        let requestPath = "/api/v2/mix/order/place-order";
         const timestamp = await getTimestamp();
-
         const lastHistory = await ArtemHistory.findOne().sort({ createdAt: -1 });
 
-        if (lastHistory?.action !== action) {
+        if (lastHistory && lastHistory?.action !== action) {
+            if (apiCount === 0) tradeDir = 'plus';
+            else tradeDir = 'minus';
+        }
+
+        if (tradeDir === 'minus') {
             const oppositeAction = action === 'buy' ? 'sell' : 'buy';
-            const latestHistory = await ArtemHistory.findOne({ action }).sort({ createdAt: - 1 });
+            // const latestHistory = await ArtemHistory.findOne({ action }).sort({ createdAt: - 1 });
     
-            const latestTime = latestHistory ? latestHistory.createdAt.getTime() : Date.now();
+            // const latestTime = latestHistory ? latestHistory.createdAt.getTime() : Date.now();
             const historySinceLatest = await ArtemHistory.find({
                 action: oppositeAction,
-                createdAt: { $gte: new Date(latestTime), $lte: new Date()} 
-            });
+                // createdAt: { $gte: new Date(latestTime), $lte: new Date()} 
+            }).limit(apiCount);
 
+            
+            if (isClosed) return res.status(200).json({message: 'success', closed: true});
+            
             const totalSize = historySinceLatest.reduce((sum, record) => sum + Number(record.size), 0);
+            console.log(apiCount, historySinceLatest, totalSize)
 
             const postParams = {
                 symbol: 'SBTCSUSDT',
                 productType: 'susdt-futures',
-                side: oppositeAction,
-                totalSize,
-                marginCoin: 'SUSDT',
                 marginMode: 'isolated',
+                marginCoin: 'SUSDT',
+                size: totalSize,
+                side: oppositeAction,
+                tradeSide: 'close',
                 orderType: 'market',
                 clientOid: timestamp,
             }
@@ -145,44 +156,50 @@ router.post('/artem/bitget', async (req, res) => {
                 }
             })
             const newHistory = new ArtemHistory({
+                coinpair: 'SBTCSUSDT',
+                action,
+                size,
+                data: result.data
+            })
+            await newHistory.save();
+        } else {
+            const postParams = {
+                symbol: 'SBTCSUSDT',
+                productType: 'susdt-futures',
+                marginMode: 'isolated',
+                marginCoin: 'SUSDT',
+                size,
+                side: action,
+                tradeSide: 'open',
+                orderType: 'market',
+                clientOid: timestamp,
+            }
+            const postBody = JSON.stringify(postParams);
+            const postSign = sign(preHash(timestamp, "POST", requestPath, postBody), apiSecret || '');
+    
+            const result = await axios.post(`https:/api.bitget.com${requestPath}`, postParams, {
+                headers: {
+                    'ACCESS-KEY': apiKey,
+                    'ACCESS-PASSPHRASE': apiPass,
+                    'ACCESS-SIGN': postSign,
+                    'ACCESS-TIMESTAMP': timestamp
+                }
+            })
+            const newHistory = new ArtemHistory({
                 coinpair,
                 action,
                 size,
-                data: result
+                data: result.data
             })
             await newHistory.save();
         }
+        
+        if (tradeDir === 'plus') apiCount ++;
+        else apiCount --;
 
-        const postParams = {
-            symbol: 'SBTCSUSDT',
-            productType: 'susdt-futures',
-            side: action,
-            size,
-            marginCoin: 'SUSDT',
-            marginMode: 'isolated',
-            orderType: 'market',
-            clientOid: timestamp,
-        }
-        const postBody = JSON.stringify(postParams);
-        const postSign = sign(preHash(timestamp, "POST", requestPath, postBody), apiSecret || '');
-
-        const result = await axios.post(`https:/api.bitget.com${requestPath}`, postParams, {
-            headers: {
-                'ACCESS-KEY': apiKey,
-                'ACCESS-PASSPHRASE': apiPass,
-                'ACCESS-SIGN': postSign,
-                'ACCESS-TIMESTAMP': timestamp
-            }
-        })
-        const newHistory = new ArtemHistory({
-            coinpair,
-            action,
-            size,
-            data: result
-        })
-        await newHistory.save();
+        // const result = await axios.get("https://api.bitget.com/api/v2/mix/market/tickers?productType=SUSDT-FUTURES");
         return res.status(200).json({ message: 'success' });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error during webhook handling:', error);
         return res.status(500).json({ message: 'Server error' });
     }

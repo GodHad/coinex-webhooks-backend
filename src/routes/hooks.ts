@@ -197,7 +197,6 @@ router.get('/admin-hooks', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRe
         
                 const dependingHooks = await Hook.find({ adminHook: hook._id });
 
-                console.log(dependingHooks)
                 const histories = await History.find({ hook: { $in: dependingHooks.map(h => h._id) } });
         
                 let totalWins = 0;

@@ -9,7 +9,7 @@ import { jwtAuth } from '../middleware/authorization';
 import webhooksMaintenanceMiddleware from '../middleware/webhooksMaintenance';
 import ArtemHistory from '../models/Artem';
 import { getTimestamp, sign, preHash } from '../utils/bitgetUtils';
-import { handleTrade } from '../utils/coinexUtils';
+import { checkOrderExisting, handleTrade } from '../utils/coinexUtils';
 
 require("dotenv").config("../.env");
 
@@ -119,16 +119,16 @@ router.post('/artem/bitget', async (req, res) => {
         if (tradeDir === 'minus') {
             const oppositeAction = action === 'buy' ? 'sell' : 'buy';
             // const latestHistory = await ArtemHistory.findOne({ action }).sort({ createdAt: - 1 });
-    
+
             // const latestTime = latestHistory ? latestHistory.createdAt.getTime() : Date.now();
             const historySinceLatest = await ArtemHistory.find({
                 action: oppositeAction,
                 // createdAt: { $gte: new Date(latestTime), $lte: new Date()} 
             }).limit(apiCount);
 
-            
-            if (isClosed) return res.status(200).json({message: 'success', closed: true});
-            
+
+            if (isClosed) return res.status(200).json({ message: 'success', closed: true });
+
             const totalSize = historySinceLatest.reduce((sum, record) => sum + Number(record.size), 0);
             console.log(apiCount, historySinceLatest, totalSize)
 
@@ -176,7 +176,7 @@ router.post('/artem/bitget', async (req, res) => {
             }
             const postBody = JSON.stringify(postParams);
             const postSign = sign(preHash(timestamp, "POST", requestPath, postBody), apiSecret || '');
-    
+
             const result = await axios.post(`https:/api.bitget.com${requestPath}`, postParams, {
                 headers: {
                     'ACCESS-KEY': apiKey,
@@ -193,9 +193,9 @@ router.post('/artem/bitget', async (req, res) => {
             })
             await newHistory.save();
         }
-        
-        if (tradeDir === 'plus') apiCount ++;
-        else apiCount --;
+
+        if (tradeDir === 'plus') apiCount++;
+        else apiCount--;
 
         // const result = await axios.get("https://api.bitget.com/api/v2/mix/market/tickers?productType=SUSDT-FUTURES");
         return res.status(200).json({ message: 'success' });
@@ -255,5 +255,10 @@ router.get('/resend/:id', jwtAuth, webhooksMaintenanceMiddleware, async (req, re
         return res.status(500).json({ message: 'Server error' });
     }
 });
+
+router.get('/test', async (req, res) => {
+    const result = await checkOrderExisting('SOLUSDT', 'sell', '842797C7FFFE4C3789F895B4259D7C88', '14D24FB43E72A33E947B765918CEF6F00A2A18260959AC64');
+    return res.status(200).json({ result })
+})
 
 export default router;

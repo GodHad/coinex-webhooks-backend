@@ -2,7 +2,7 @@ import axios from "axios";
 import crypto from 'crypto';
 import History from "../models/History";
 
-const url = 'https://api.coinex.com/v2/futures/order';
+const commonURL = 'https://api.coinex.com';
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -16,15 +16,51 @@ function createAuthorization(method: string, request_path: string, body_json: st
         .toLowerCase();
 }
 
+export const checkOrderExisting = async (symbol: string, action: string, coinExApiKey: string, coinExApiSecret: string) => {
+    const response = await axios.get('https://api.coinex.com/v2/time');
+    const timestamp = response.data.data.timestamp.toString();
+    const data = {
+        market: symbol, 
+        market_type: 'FUTURES',
+        side: action === 'buy' ? 'sell' : 'buy',
+    };
+
+    const queryString = (Object.keys(data) as (keyof typeof data)[])
+        .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(data[key])}`)
+        .join('&');
+    const requestPath = "/v2/spot/pending-order" + "?" + queryString;
+    const res = await axios.get(commonURL + requestPath, {
+        headers: {
+            "X-COINEX-KEY": coinExApiKey,
+            "X-COINEX-SIGN": createAuthorization("GET", requestPath, "", timestamp, coinExApiSecret),
+            "X-COINEX-TIMESTAMP": timestamp,
+        }
+    });
+    const pendingOrders = res.data.code === 0 ? res.data.data : [];
+    console.log("pending orders:\n", JSON.stringify(res.data, null, 2));
+    return pendingOrders;
+}
+
 const placeOrderOnCoinEx = async (
     symbol: string,
     action: string,
     amount: string,
     coinExApiKey: string,
-    coinExApiSecret: string
+    coinExApiSecret: string,
+    isClosing: boolean,
 ): Promise<{ success: boolean; data?: any; error?: any }> => {
     const response = await axios.get('https://api.coinex.com/v2/time');
     const timestamp = response.data.data.timestamp.toString();
+
+    if (isClosing) {
+        const pendingOrders = await checkOrderExisting(symbol, action, coinExApiKey, coinExApiSecret);
+        if (pendingOrders.length === 0) {
+            return {
+                success: false,
+                error: 'No pending orders'
+            }
+        }
+    }
 
     const data = JSON.stringify({
         market: symbol,
@@ -35,7 +71,7 @@ const placeOrderOnCoinEx = async (
     });
 
     try {
-        const result = await axios.post(url, data, {
+        const result = await axios.post(commonURL + '/v2/futures/order', data, {
             headers: {
                 'Content-Type': 'application/json; charset=utf-8',
                 Accept: 'application/json',
@@ -151,7 +187,8 @@ export const handleTrade = async (
             tradeAction,
             amount,
             webhook.coinExApiKey,
-            webhook.coinExApiSecret
+            webhook.coinExApiSecret,
+            isClosing
         );
 
         if (!success) {

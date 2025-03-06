@@ -10,7 +10,7 @@ import userRoutes from './routes/users';
 import adminRoutes from './routes/admin';
 
 const app = express();
-const PORT = 5000;
+const PORT = 5050;
 
 app.use(cors());
 

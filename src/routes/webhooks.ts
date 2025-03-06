@@ -256,9 +256,9 @@ router.get('/resend/:id', jwtAuth, webhooksMaintenanceMiddleware, async (req, re
     }
 });
 
-router.get('/test', async (req, res) => {
-    const result = await checkOrderExisting('SOLUSDT', 'sell', '842797C7FFFE4C3789F895B4259D7C88', '14D24FB43E72A33E947B765918CEF6F00A2A18260959AC64');
-    return res.status(200).json({ result })
-})
+// router.get('/test', async (req, res) => {
+//     const result = await checkOrderExisting('SOLUSDT', 'sell', '842797C7FFFE4C3789F895B4259D7C88', '14D24FB43E72A33E947B765918CEF6F00A2A18260959AC64');
+//     return res.status(200).json({ result })
+// })
 
 export default router;

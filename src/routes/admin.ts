@@ -12,9 +12,9 @@ import ExchangePartner from '../models/ExchangePartner';
 
 const router = express.Router();
 
-export function isValidUsername(username: string) {
-    const usernameRegex = /^[a-z0-9]+$/;
-    return usernameRegex.test(username);
+export function isValidEmail(email: string): boolean {
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return emailRegex.test(email);
 }
 
 router.get('/hooks', jwtAuth, async (req: JWTRequest, res) => {
@@ -226,7 +226,7 @@ router.get('/overview', adminAuth, async (req: JWTRequest, res) => {
 
 router.post('/add-user', adminAuth, async (req, res) => {
     const { firstName, lastName, email, password } = req.body;
-    if (!isValidUsername(email)) {
+    if (!isValidEmail(email)) {
         return res.status(400).json({ message: 'Username can only contain lowercase letters and numbers, with no spaces.' });
     }
     try {

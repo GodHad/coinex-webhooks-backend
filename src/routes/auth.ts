@@ -4,7 +4,7 @@ import User from '../models/User';
 import jwt from 'jsonwebtoken';
 import { jwtAuth } from '../middleware/authorization';
 import { JWTRequest } from '../types/JWTRequest';
-import { isValidUsername } from './admin';
+import { isValidEmail } from './admin';
 import siteMaintenanceMiddleware from '../middleware/siteMaintainance';
 import AdminData from '../models/AdminData';
 
@@ -115,8 +115,8 @@ router.post('/update-user', jwtAuth, siteMaintenanceMiddleware, async (req: JWTR
             isUpdated = true;
         }
         if (email && email !== user.email) {
-            if (!isValidUsername(email)) {
-                return res.status(400).json({ message: 'Username can only contain lowercase letters and numbers, with no spaces.' });
+            if (!isValidEmail(email)) {
+                return res.status(400).json({ message: 'Please type the correct email type.' });
             }
             const existingUser = await User.findOne({ email });
             if (existingUser) {

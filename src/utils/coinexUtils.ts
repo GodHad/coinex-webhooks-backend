@@ -1,6 +1,6 @@
 import axios from "axios";
 import crypto from 'crypto';
-import History from "../models/History";
+import History, { IHistory } from "../models/History";
 
 const commonURL = 'https://api.coinex.com';
 
@@ -177,9 +177,13 @@ export const handleTrade = async (
     webhook: any,
     ticker: string,
     action: string,
-    amount: string
+    amount: string,
+    history?: IHistory,
 ): Promise<{ success: boolean; message?: string }> => {
-    const requiredActions = handleTradeSignal(action, webhook.tradeDirection, webhook.positionState);
+    const requiredActions = history ? [{
+        action: history.action,
+        isClosing: history.positionState !== 'neutral'
+    }] : handleTradeSignal(action, webhook.tradeDirection, webhook.positionState);
 
     for (const { action: tradeAction, isClosing } of requiredActions) {
         const { success, data, error } = await placeOrderOnCoinEx(
@@ -195,18 +199,35 @@ export const handleTrade = async (
             return { success: false, message: 'Order placement failed' };
         }
 
-        const newHistory = new History({
-            hook: webhook._id,
-            symbol: ticker,
-            action: tradeAction,
-            amount,
-            status: success,
-            error: error || null,
-            data: data || null,
-            positionState: webhook.positionState,
-            tradeDirection: webhook.tradeDirection
-        });
-        await newHistory.save();
+        if (history) {
+            history.isResended = true;
+            history.resendStatus = success;
+            history.resendResult = data || null;
+            history.resendError = error || null;
+            await history.save();
+        } else {
+            const newHistory = new History({
+                hook: webhook._id,
+                symbol: ticker,
+                action: tradeAction,
+                amount,
+                status: success,
+                error: error || null,
+                data: data || null,
+                positionState: webhook.positionState,
+                tradeDirection: webhook.tradeDirection
+            });
+            await newHistory.save();
+            await delay(60000);
+            await handleTrade(webhook, newHistory.symbol, newHistory.action, newHistory.amount, newHistory);
+            if (isClosing) {
+                webhook.positionState = 'neutral';
+            } else if (tradeAction === 'buy') {
+                webhook.positionState = 'long';
+            } else if (tradeAction === 'sell') {
+                webhook.positionState = 'short';
+            }
+        }
 
         const result = await getPositionData(ticker, webhook.coinExApiKey, webhook.coinExApiSecret);
 
@@ -220,14 +241,6 @@ export const handleTrade = async (
                 webhook.takeProfitPrice = position.take_profit_price;
                 webhook.currentPrice = position.settle_price;
             }
-        }
-
-        if (isClosing) {
-            webhook.positionState = 'neutral';
-        } else if (tradeAction === 'buy') {
-            webhook.positionState = 'long';
-        } else if (tradeAction === 'sell') {
-            webhook.positionState = 'short';
         }
 
         await webhook.save();

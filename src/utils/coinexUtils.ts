@@ -219,7 +219,9 @@ export const handleTrade = async (
             });
             await newHistory.save();
             await delay(60000);
-            await handleTrade(webhook, newHistory.symbol, newHistory.action, newHistory.amount, newHistory);
+            if (data.code !== 0) {
+                await handleTrade(webhook, newHistory.symbol, newHistory.action, newHistory.amount, newHistory);
+            }
             if (isClosing) {
                 webhook.positionState = 'neutral';
             } else if (tradeAction === 'buy') {

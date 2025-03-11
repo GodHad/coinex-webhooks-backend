@@ -21,6 +21,8 @@ const adminDataSchema = new mongoose.Schema(
         siteMaintainanceMode: { type: Boolean, required: true },
         webhooksMaintainanceMode: { type: Boolean, required: true },
         allowSignup: { type: Boolean, required: true },
+        aiApiURL: { type: String, required: true },
+        systemPrompt: { type: String, required: true },
         // inviteCodes:{type: Array}
     },
     { timestamps: true }

@@ -8,7 +8,6 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 function createAuthorization(method: string, request_path: string, body_json: string, timestamp: string, SECRET_KEY: string) {
     var text = method + request_path + body_json + timestamp;
-    console.log(text);
     return crypto
         .createHmac("sha256", SECRET_KEY)
         .update(text)
@@ -16,11 +15,16 @@ function createAuthorization(method: string, request_path: string, body_json: st
         .toLowerCase();
 }
 
-export const checkOrderExisting = async (symbol: string, action: string, coinExApiKey: string, coinExApiSecret: string) => {
+const getTimestamp = async () => {
     const response = await axios.get('https://api.coinex.com/v2/time');
     const timestamp = response.data.data.timestamp.toString();
+    return timestamp;
+}
+
+export const checkOrderExisting = async (symbol: string, action: string, coinExApiKey: string, coinExApiSecret: string) => {
+    const timestamp = await getTimestamp();
     const data = {
-        market: symbol, 
+        market: symbol,
         market_type: 'FUTURES',
         side: action === 'buy' ? 'sell' : 'buy',
     };
@@ -28,7 +32,7 @@ export const checkOrderExisting = async (symbol: string, action: string, coinExA
     const queryString = (Object.keys(data) as (keyof typeof data)[])
         .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(data[key])}`)
         .join('&');
-    const requestPath = "/v2/spot/pending-order" + "?" + queryString;
+    const requestPath = "/v2/futures/pending-position" + "?" + queryString;
     const res = await axios.get(commonURL + requestPath, {
         headers: {
             "X-COINEX-KEY": coinExApiKey,
@@ -37,7 +41,6 @@ export const checkOrderExisting = async (symbol: string, action: string, coinExA
         }
     });
     const pendingOrders = res.data.code === 0 ? res.data.data : [];
-    console.log("pending orders:\n", JSON.stringify(res.data, null, 2));
     return pendingOrders;
 }
 
@@ -49,8 +52,7 @@ const placeOrderOnCoinEx = async (
     coinExApiSecret: string,
     isClosing: boolean,
 ): Promise<{ success: boolean; data?: any; error?: any }> => {
-    const response = await axios.get('https://api.coinex.com/v2/time');
-    const timestamp = response.data.data.timestamp.toString();
+    const timestamp = await getTimestamp();
 
     if (isClosing) {
         const pendingOrders = await checkOrderExisting(symbol, action, coinExApiKey, coinExApiSecret);
@@ -99,8 +101,7 @@ const getPositionData = async (
     coinExApiKey: string,
     coinExApiSecret: string
 ): Promise<{ success: boolean; data?: any; error?: any }> => {
-    const response = await axios.get('https://api.coinex.com/v2/time');
-    const timestamp = response.data.data.timestamp.toStrin
+    const timestamp = await getTimestamp();
 
     const url = `/v2/futures/pending-position?market=${symbol}&market_type=FUTURES&page=1&limit=1`
 
@@ -185,7 +186,8 @@ export const handleTrade = async (
         isClosing: history.positionState !== 'neutral'
     }] : handleTradeSignal(action, webhook.tradeDirection, webhook.positionState);
 
-    for (const { action: tradeAction, isClosing } of requiredActions) {
+    let isClosing = requiredActions[0].isClosing;
+    for (const { action: tradeAction } of requiredActions) {
         const { success, data, error } = await placeOrderOnCoinEx(
             ticker,
             tradeAction,
@@ -194,10 +196,6 @@ export const handleTrade = async (
             webhook.coinExApiSecret,
             isClosing
         );
-
-        if (!success) {
-            return { success: false, message: 'Order placement failed' };
-        }
 
         if (history) {
             history.isResended = true;
@@ -218,25 +216,35 @@ export const handleTrade = async (
                 tradeDirection: webhook.tradeDirection
             });
             await newHistory.save();
-            await delay(60000);
-            if (data.code !== 0) {
+            await delay(100);
+
+            if (data && data.code !== 0) {
                 await handleTrade(webhook, newHistory.symbol, newHistory.action, newHistory.amount, newHistory);
             }
-            if (isClosing) {
-                webhook.positionState = 'neutral';
-            } else if (tradeAction === 'buy') {
-                webhook.positionState = 'long';
-            } else if (tradeAction === 'sell') {
-                webhook.positionState = 'short';
+
+            if (success && data.code === 0) {
+                if (isClosing) {
+                    webhook.positionState = 'neutral';
+                } else if (tradeAction === 'buy') {
+                    webhook.positionState = 'long';
+                } else if (tradeAction === 'sell') {
+                    webhook.positionState = 'short';
+                }
+                isClosing = !isClosing;
             }
         }
+        
+        await webhook.save();
+        await delay(200);
+    }
 
-        const result = await getPositionData(ticker, webhook.coinExApiKey, webhook.coinExApiSecret);
+    const result = await getPositionData(ticker, webhook.coinExApiKey, webhook.coinExApiSecret);
 
-        if (result.success) {
-            const data = result.data;
-            if (data.code === 0) {
-                const position = data.data[0];
+    if (result.success) {
+        const data = result.data;
+        if (data.code === 0) {
+            const position = data.data[0];
+            if (position) {
                 webhook.leverage = position.leverage;
                 webhook.entryPrice = position.avg_entry_price;
                 webhook.stopLossPrice = position.stop_loss_price;
@@ -244,10 +252,121 @@ export const handleTrade = async (
                 webhook.currentPrice = position.settle_price;
             }
         }
-
-        await webhook.save();
-        await delay(60000);
     }
 
     return { success: true, message: 'Order placed successfully' };
+};
+
+export const handleGetDataFromCoinex = async (
+    coinExApiKey: string,
+    coinExApiSecret: string,
+    url: string,
+): Promise<{ success: boolean, data?: any; error?: any }> => {
+    const timestamp = await getTimestamp();
+    try {
+        const result = await axios.get('https://api.coinex.com' + url, {
+            headers: {
+                'Content-Type': 'application/json; charset=utf-8',
+                Accept: 'application/json',
+                "X-COINEX-KEY": coinExApiKey,
+                "X-COINEX-SIGN": createAuthorization("GET", url, "", timestamp, coinExApiSecret),
+                "X-COINEX-TIMESTAMP": timestamp,
+            },
+        });
+
+        return {
+            success: true,
+            data: result.data,
+        };
+    } catch (error: any) {
+        console.error('CoinEx API Request Failed:', error.response?.data || error.message);
+        return {
+            success: false,
+            error: error.response?.data || error.message,
+        };
+    }
+}
+
+export const handleGetHistoryDataFromCoinex = async (
+    coinExApiKey: string,
+    coinExApiSecret: string
+): Promise<{ success: boolean; data?: any; error?: any }> => {
+    const timestamp = await getTimestamp();
+    const oneMonthAgo = timestamp - 30 * 24 * 60 * 60 * 1000;
+    let page = 1;
+    let hasNext = true;
+    let allData: { position: any; finished: boolean; }[] = [];
+
+    try {
+        while (hasNext) {
+            const url = `/v2/futures/pending-position?market_type=FUTURES&page=${page}&limit=100`;
+
+            const result = await axios.get('https://api.coinex.com' + url, {
+                headers: {
+                    'Content-Type': 'application/json; charset=utf-8',
+                    Accept: 'application/json',
+                    "X-COINEX-KEY": coinExApiKey,
+                    "X-COINEX-SIGN": createAuthorization("GET", url, "", timestamp, coinExApiSecret),
+                    "X-COINEX-TIMESTAMP": timestamp,
+                },
+            });
+
+            const responseData = result.data;
+            if (responseData.code !== 0) {
+                return {
+                    success: false,
+                    error: responseData.message,
+                };
+            }
+
+            if (responseData.data && responseData.data.length > 0) {
+                allData = allData.concat(responseData.data.map((p: any) => ({ position: p, finished: false })));
+            }
+
+            hasNext = responseData.pagination?.has_next || false;
+            page++;
+            await delay(500);
+        }
+
+        page = 1, hasNext = true;
+        while (hasNext) {
+            const url = `/v2/futures/finished-position?market_type=FUTURES&start_time=${oneMonthAgo}&page=${page}&limit=100`;
+
+            const result = await axios.get('https://api.coinex.com' + url, {
+                headers: {
+                    'Content-Type': 'application/json; charset=utf-8',
+                    Accept: 'application/json',
+                    "X-COINEX-KEY": coinExApiKey,
+                    "X-COINEX-SIGN": createAuthorization("GET", url, "", timestamp, coinExApiSecret),
+                    "X-COINEX-TIMESTAMP": timestamp,
+                },
+            });
+
+            const responseData = result.data;
+            if (responseData.code !== 0) {
+                return {
+                    success: false,
+                    error: responseData.message,
+                };
+            }
+
+            if (responseData.data && responseData.data.length > 0) {
+                allData = allData.concat(responseData.data.map((p: any) => ({ position: p, finished: true })));
+            }
+
+            hasNext = responseData.pagination?.has_next || false;
+            page++;
+            await delay(500);
+        }
+
+        return {
+            success: true,
+            data: allData,
+        };
+    } catch (error: any) {
+        return {
+            success: false,
+            error: error.response?.data || error.message,
+        };
+    }
 };

@@ -8,6 +8,7 @@ import webhooksRoutes from './routes/webhooks';
 import historyRoutes from './routes/histories';
 import userRoutes from './routes/users';
 import adminRoutes from './routes/admin';
+import './cron/cronJobs';
 
 const app = express();
 const PORT = 5050;

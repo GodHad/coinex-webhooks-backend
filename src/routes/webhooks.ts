@@ -56,6 +56,7 @@ router.post('/:webhookUrl', webhooksMaintenanceMiddleware, async (req, res) => {
                 }
 
                 const result = await handleTrade(webhook, ticker, action, webhook.amount || amount);
+                
                 results.push({
                     webhookId: webhook._id,
                     success: result.success,

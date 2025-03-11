@@ -1,12 +1,14 @@
 import express, { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import User from '../models/User';
 import jwt from 'jsonwebtoken';
+import User from '../models/User';
 import { jwtAuth } from '../middleware/authorization';
 import { JWTRequest } from '../types/JWTRequest';
 import { isValidEmail } from './admin';
 import siteMaintenanceMiddleware from '../middleware/siteMaintainance';
 import AdminData from '../models/AdminData';
+// import { sendEmail } from '../utils/sendMail';
+require('dotenv').config();
 
 const router = express.Router();
 
@@ -18,7 +20,7 @@ router.post('/register', siteMaintenanceMiddleware, async (req: Request, res: Re
             return res.status(400).json({ message: 'You don\'t have the permission to access.' });
         }
 
-        if (user.status) return res.status(400).json({message: 'You already registered. Please login'});
+        if (user.status) return res.status(400).json({ message: 'You already registered. Please login' });
 
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
@@ -29,7 +31,18 @@ router.post('/register', siteMaintenanceMiddleware, async (req: Request, res: Re
 
         user.status = 1;
 
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otpExpires = new Date(Date.now() + 5 * 60000);
+        user.otp = otp;
+        user.otpExpires = otpExpires;
+
         await user.save();
+
+        const subject = "Your Login Authorization Code";
+        const text = `Your OTP code is: ${otp}`;
+        const html = `<h3>Your OTP Code</h3><p><strong>${otp}</strong></p>`;
+
+        // const result = await sendEmail(email, subject, text, html);
         const token = jwt.sign({ userId: user._id }, 'secret', { expiresIn: '1h' });
 
         res.status(200).json({
@@ -52,10 +65,10 @@ router.post('/login', async (req: Request, res: Response) => {
             return res.status(400).json({ message: 'Password is incorrect' });
         }
 
-        if (!user.status) return res.status(400).json({message: 'Please request access to login'});
+        if (!user.status) return res.status(400).json({ message: 'Please request access to login' });
         const adminData = await AdminData.findOne();
 
-        if (adminData?.siteMaintainanceMode && !user.isAdmin) return res.status(400).json({message: 'Site is currently in maintenance. Please try again later'})
+        if (adminData?.siteMaintainanceMode && !user.isAdmin) return res.status(400).json({ message: 'Site is currently in maintenance. Please try again later' })
 
         const isMatch = await bcrypt.compare(password, user.password);
         if (!isMatch) {
@@ -82,7 +95,7 @@ router.get('/login-with-jwt', siteMaintenanceMiddleware, jwtAuth, async (req: JW
         const newToken = jwt.sign({ userId }, 'secret', { expiresIn: '1h' });
         const user = await User.findByIdAndUpdate(
             userId,
-            { $set: { updatedAt: new Date() } }, 
+            { $set: { updatedAt: new Date() } },
             { new: true }
         );
         return res.status(200).json({
@@ -147,6 +160,38 @@ router.post('/update-user', jwtAuth, siteMaintenanceMiddleware, async (req: JWTR
     }
 });
 
+router.post("/verify-otp", async (req, res) => {
+    try {
+        const { email, otp } = req.body;
+
+        if (!email || !otp) {
+            return res.status(400).json({ error: "Email and OTP are required" });
+        }
+
+        const user = await User.findOne({ email });
+
+        if (!user || !user.otp || !user.otpExpires) {
+            return res.status(401).json({ error: "OTP not found. Request a new one." });
+        }
+
+        if (new Date() > user.otpExpires) {
+            return res.status(401).json({ error: "OTP expired. Request a new one." });
+        }
+
+        if (user.otp !== otp) {
+            return res.status(401).json({ error: "Invalid OTP" });
+        }
+
+        user.otp = null;
+        user.otpExpires = null;
+        await user.save();
+
+        const token = jwt.sign({ userId: user._id }, 'secret', { expiresIn: '1h' });
+
+        return res.status(200).json({ message: "OTP verified. Login successful.", token });
+    } catch (error) {
+        return res.status(404).json({ message: 'Server error' });
+    }
+});
 
 export default router;
-

@@ -204,7 +204,7 @@ router.get('/admin-hooks', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRe
         
                 if (histories.length > 0) {
                     totalPnl = histories.reduce((sum, history) => {
-                        if (history.data.data && history.data.data.realized_pnl !== undefined) {
+                        if (history.data && history.data.data && history.data.data.realized_pnl !== undefined) {
                             if (Number(history.data.data.realized_pnl) >= 0) totalWins++;
                             return sum + parseFloat(history.data.data.realized_pnl);
                         }

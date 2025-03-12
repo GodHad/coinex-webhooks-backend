@@ -186,8 +186,7 @@ export const handleTrade = async (
         isClosing: history.positionState !== 'neutral'
     }] : handleTradeSignal(action, webhook.tradeDirection, webhook.positionState);
 
-    let isClosing = requiredActions[0].isClosing;
-    for (const { action: tradeAction } of requiredActions) {
+    for (const { action: tradeAction, isClosing } of requiredActions) {
         const { success, data, error } = await placeOrderOnCoinEx(
             ticker,
             tradeAction,
@@ -230,7 +229,6 @@ export const handleTrade = async (
                 } else if (tradeAction === 'sell') {
                     webhook.positionState = 'short';
                 }
-                isClosing = !isClosing;
             }
         }
         

@@ -104,7 +104,7 @@ const apiSecret = process.env.API_SECRET;
 
 let apiCount = 0, tradeDir = 'plus', isClosed = false;
 
-router.post('/artem/bitget', async (req, res) => {
+router.post('/artem/bitget1515', async (req, res) => {
     try {
         const { coinpair, action, size } = req.body;
 

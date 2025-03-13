@@ -26,7 +26,6 @@ export const checkOrderExisting = async (symbol: string, action: string, coinExA
     const data = {
         market: symbol,
         market_type: 'FUTURES',
-        side: action === 'buy' ? 'sell' : 'buy',
     };
 
     const queryString = (Object.keys(data) as (keyof typeof data)[])
@@ -56,7 +55,9 @@ const placeOrderOnCoinEx = async (
 
     if (isClosing) {
         const pendingOrders = await checkOrderExisting(symbol, action, coinExApiKey, coinExApiSecret);
-        if (pendingOrders.length === 0) {
+        const side = action === 'buy' ? 'short' : 'long';
+        console.log(pendingOrders, side, action)
+        if (pendingOrders.filter((o: any) => o.side === side).length === 0) {
             return {
                 success: false,
                 error: 'No pending orders'

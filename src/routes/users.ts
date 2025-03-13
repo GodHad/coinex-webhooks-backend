@@ -192,32 +192,29 @@ router.get('/get-pnl-last-30-days', jwtAuth, async (req: JWTRequest, res) => {
         const userId = req.user?.userId;
         if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
-        // Get the last 30 days date range
-        const end = new Date(); // Today
+        const end = new Date();
         const start = new Date();
-        start.setDate(end.getDate() - 30); // 30 days ago
+        start.setDate(end.getDate() - 30);
 
         const hooks = await Hook.find({ creator: userId });
+
         const positionHistories = await PositionHistory.find({
             hook: { $in: hooks.map(h => h._id) },
-            createdAt: { $gte: start, $lte: end }
+            'data.created_at': { $gte: start.getTime(), $lte: end.getTime() }
         });
 
-        // Separate Standard & Premium hooks
         const standardHooks = hooks.filter(hook => !hook.adminHook);
         const premiumHooks = hooks.filter(hook => hook.adminHook);
 
-        // Initialize data structure with all past 30 days
         const initialData = Array.from({ length: 30 }, (_, i) => {
-            const dateKey = moment().subtract(i, 'days').format('MMM D'); // "Feb 10"
+            const dateKey = new Date(end.getTime() - i * 24 * 60 * 60 * 1000).toISOString().split('T')[0]; 
             return { [dateKey]: 0 };
-        }).reduce((acc, obj) => ({ ...acc, ...obj }), {}); // Convert array to object
+        }).reduce((acc, obj) => ({ ...acc, ...obj }), {});
 
-        // Helper function to group PnL by date
         const groupPnlByDate = (histories: any[], hooks: any[]) => {
             return histories.reduce((acc, history) => {
-                if (history.data?.realized_pnl !== undefined) {
-                    const historyDate = moment(history.createdAt).format('MMM D'); // "Feb 10"
+                if (history.data?.realized_pnl) {
+                    const historyDate = new Date(parseInt(history.data.created_at)).toISOString().split('T')[0];
                     const pnl = parseFloat(history.data.realized_pnl);
 
                     if (hooks.some(hook => hook._id.equals(history.hook))) {
@@ -225,10 +222,9 @@ router.get('/get-pnl-last-30-days', jwtAuth, async (req: JWTRequest, res) => {
                     }
                 }
                 return acc;
-            }, { ...initialData }); // Fill missing days with 0
+            }, { ...initialData });
         };
 
-        // Compute PnL for Standard and Premium
         const standardPnlByDate = groupPnlByDate(positionHistories, standardHooks);
         const premiumPnlByDate = groupPnlByDate(positionHistories, premiumHooks);
 

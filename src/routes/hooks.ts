@@ -240,6 +240,7 @@ router.get('/admin-hooks', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRe
                 });
                 
                 const dailyPnl: { [key: string]: number } = {}; 
+                const dailyInvest: { [key: string]: number } = {}; 
                 
                 userHistories7d.forEach(history => {
                     if (history.data?.realized_pnl) {
@@ -249,7 +250,13 @@ router.get('/admin-hooks', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRe
                         if (!dailyPnl[dateKey]) {
                             dailyPnl[dateKey] = 0;
                         }
+
+                        if (!dailyInvest[dateKey]) {
+                            dailyInvest[dateKey] = 0;
+                        }
+                        
                         dailyPnl[dateKey] += pnl;
+                        dailyInvest[dateKey] += Number(history.data.avg_entry_price) * Number(history.data.ath_position_amount);
                     }
                 });
                 
@@ -262,7 +269,7 @@ router.get('/admin-hooks', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRe
                     labels.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
                     
                     const pnl = dailyPnl[dateKey] || 0;
-                    const initialInvestment = userHook?.balance?.inPosition || 1;
+                    const initialInvestment = dailyInvest[dateKey] || 1;
                     const pnlPercent = (pnl / initialInvestment) * 100;
                 
                     values.push(parseFloat(pnlPercent.toFixed(2)));

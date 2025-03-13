@@ -202,7 +202,7 @@ router.get('/admin-hooks', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRe
                     hook: userHook?._id
                 });
 
-                let userTotalPnl = 0, userTotalWins = 0, totalTrades = userHistories.length;
+                let userTotalPnl = 0, userTotalInvest = 0, userTotalWins = 0, totalTrades = userHistories.length;
                 const now = Date.now();
                 const last24hStart = now - 24 * 60 * 60 * 100;
                 const last7dStart = now - 7 * 24 * 60 * 60 * 1000;
@@ -213,12 +213,12 @@ router.get('/admin-hooks', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRe
                             const pnl = parseFloat(history.data.realized_pnl);
                             if (pnl >= 0) userTotalWins++;
                             userTotalPnl += pnl;
+                            userTotalInvest += Number(history.data.avg_entry_price) * Number(history.data.ath_position_amount)
                         }
                     });
                 }
 
-                const initialInvestment = userHook?.balance?.inPosition || 1; // Avoid division by zero
-                const pnlPercent = (userTotalPnl / initialInvestment) * 100;
+                const pnlPercent = (userTotalPnl / (userTotalInvest || 1)) * 100;
 
                 const userWinRate = totalTrades > 0 ? (userTotalWins / totalTrades) * 100 : 0;
 

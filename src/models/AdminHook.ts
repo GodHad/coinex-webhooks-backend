@@ -10,7 +10,7 @@ const adminHookSchema = new mongoose.Schema(
         timeframe: { type: String },
         description: { type: String },
         imageUrl: { type: String, required: true },
-        riskLevel: { type: String, enum: ['High', 'Medium', ' Low'] },
+        riskLevel: { type: String, enum: ['High', 'Medium', 'Low'] },
         recommendedLeverage: { type: String },
         enabled: { type: Boolean, required: true },
     },

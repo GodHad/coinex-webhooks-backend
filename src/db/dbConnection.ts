@@ -1,5 +1,5 @@
 import mongoose from "mongoose";
-import AdminData from "../models/AdminData";
+import Hook from "../models/Hook";
 
 require("dotenv").config("../.env");
 const DB_CONNECTION = process.env.MONGODB_URI;
@@ -12,9 +12,8 @@ export const init = () => {
     .connect(DB_CONNECTION)
     .then(async (v) => {
       console.log(`mongodb database connected`);
-      // await AdminData.findOneAndUpdate({},{
-      //   siteMaintainanceMode: false,
-      //   webhooksMaintainanceMode: false,
+      // await Hook.findOneAndUpdate({},{
+      //   balance: null
       // })
     })
     .catch((e) => {

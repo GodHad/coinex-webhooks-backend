@@ -2,7 +2,7 @@
 import mongoose, { Document, Schema } from 'mongoose';
 import { IUser } from './User';
 
-interface IHook extends Document {
+export interface IHook extends Document {
     creator: IUser | mongoose.Types.ObjectId;
     adminHook?: mongoose.Types.ObjectId;
     name: string;
@@ -19,12 +19,17 @@ interface IHook extends Document {
     stopLossPrice?: string;
     takeProfitPrice?: string;
     currentPrice?: string;
+    balance: {
+        total: number | null;
+        available: number | null;
+        inPosition: number | null;
+    } | null;
 }
 
 const hookSchema = new Schema<IHook>(
     {
         creator: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-        adminHook: { type: mongoose.Schema.Types.ObjectId, ref: 'AdminHook' },
+        adminHook: { type: mongoose.Schema.Types.ObjectId, ref: 'AdminHook', default: null },
         name: { type: String, required: true },
         url: { type: String },
         amount: { type: Number },
@@ -39,6 +44,14 @@ const hookSchema = new Schema<IHook>(
         stopLossPrice: { type: String },
         takeProfitPrice: { type: String },
         currentPrice: { type: String },
+        balance: {
+            type: {
+                total: { type: Number, default: null },
+                available: { type: Number, default: null },
+                inPosition: { type: Number, default: null },
+            },
+            default: null,
+        },
     },
     { timestamps: true }
 );

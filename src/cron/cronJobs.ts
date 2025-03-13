@@ -35,7 +35,7 @@ async function getAccountsData(): Promise<void> {
                 if (success && data.code === 0) {
                     const subAccounts = data.data;
                     if (subAccounts) {
-                        const balances = subAccounts.reduce(
+                        const balance = subAccounts.reduce(
                             (sum: { total: number; available: number; inPosition: number }, acc: { available: string; frozen: string }) => {
                                 const available = Number(acc.available) || 0;
                                 const frozen = Number(acc.frozen) || 0;
@@ -49,9 +49,11 @@ async function getAccountsData(): Promise<void> {
                             { total: 0, available: 0, inPosition: 0 }
                         );
 
-                        total += balances.total;
-                        available += balances.available;
-                        inPosition += balances.inPosition;
+                        total += balance.total;
+                        available += balance.available;
+                        inPosition += balance.inPosition;
+                        hook.balance = balance;
+                        await hook.save();
                     }
                 }
 
@@ -82,7 +84,7 @@ async function getAccountsData(): Promise<void> {
     }
 }
 
-cron.schedule("31 21 * * *", () => {
+cron.schedule("13 20 * * *", () => {
     console.log("🕛 Running daily webhook cleanup job...");
     getAccountsData();
     removeOldWebhooks();

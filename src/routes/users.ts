@@ -96,10 +96,11 @@ router.get('/get-overview', jwtAuth, async (req: JWTRequest, res) => {
         }, 0);
 
         const now = new Date();
-        const todayStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
+        const todayStr = now.toISOString().split('T')[0]; 
+        const startOfWeek = new Date(now); 
+        startOfWeek.setDate(now.getDate() - now.getDay());
 
-        const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay())); // Sunday of this week
-        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1); // First day of this month
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
         
         const today = new Date().toISOString().split('T')[0];
 
@@ -116,7 +117,7 @@ router.get('/get-overview', jwtAuth, async (req: JWTRequest, res) => {
 
         const pnlStats = positionHistories.reduce((acc, history) => {
             if (history.data && history.data.realized_pnl !== undefined) {
-                const historyDate = new Date(history.createdAt);
+                const historyDate = new Date(parseInt(history.data.created_at));
                 const historyDateStr = historyDate.toISOString().split('T')[0];
 
                 const pnl = parseFloat(history.data.realized_pnl);
@@ -124,15 +125,12 @@ router.get('/get-overview', jwtAuth, async (req: JWTRequest, res) => {
                 if (historyDateStr === todayStr) {
                     acc.daily += pnl;
                 }
-
                 if (historyDate >= startOfWeek) {
                     acc.weekly += pnl;
                 }
-
                 if (historyDate >= startOfMonth) {
                     acc.monthly += pnl;
                 }
-
                 acc.allTime += pnl;
             }
             return acc;

@@ -66,11 +66,21 @@ router.get('/get-overview', jwtAuth, async (req: JWTRequest, res) => {
         const user = await User.findById(userId);
 
         const hooks = await Hook.find({ creator: userId });
+        const uniqueHooksMap = new Map();
 
-        const standardHooks = hooks.filter(hook => !hook.adminHook);
-        const premiumHooks = hooks.filter(hook => hook.adminHook);
+        hooks.forEach(hook => {
+            const key = `${hook.coinExApiKey}::${hook.coinExApiSecret}`;
+            if (!uniqueHooksMap.has(key)) {
+                uniqueHooksMap.set(key, hook);
+            }
+        });
 
-        const positionHistories = await PositionHistory.find({ hook: { $in: hooks.map(h => h._id) } });
+        const uniqueHooks = Array.from(uniqueHooksMap.values());
+
+        const standardHooks = uniqueHooks.filter(hook => !hook.adminHook);
+        const premiumHooks = uniqueHooks.filter(hook => hook.adminHook);
+
+        const positionHistories = await PositionHistory.find({ hook: { $in: uniqueHooks.map(h => h._id) } });
         const standardPositionHistories = await PositionHistory.find({ hook: { $in: standardHooks.map(h => h._id) } });
         const premiumPositionHistories = await PositionHistory.find({ hook: { $in: premiumHooks.map(h => h._id) } });
 
@@ -136,7 +146,7 @@ router.get('/get-overview', jwtAuth, async (req: JWTRequest, res) => {
             return acc;
         }, { daily: 0, weekly: 0, monthly: 0, allTime: 0 });
 
-        const totalRisk = hooks.reduce((sum, hook) => {
+        const totalRisk = uniqueHooks.reduce((sum, hook) => {
             if (hook.leverage && hook.entryPrice) {
                 return sum + (parseFloat(hook.leverage) * parseFloat(hook.entryPrice));
             }
@@ -195,14 +205,24 @@ router.get('/get-pnl-last-30-days', jwtAuth, async (req: JWTRequest, res) => {
         start.setDate(end.getDate() - 30);
 
         const hooks = await Hook.find({ creator: userId });
+        const uniqueHooksMap = new Map();
+
+        hooks.forEach(hook => {
+            const key = `${hook.coinExApiKey}::${hook.coinExApiSecret}`;
+            if (!uniqueHooksMap.has(key)) {
+                uniqueHooksMap.set(key, hook);
+            }
+        });
+
+        const uniqueHooks = Array.from(uniqueHooksMap.values());
 
         const positionHistories = await PositionHistory.find({
-            hook: { $in: hooks.map(h => h._id) },
+            hook: { $in: uniqueHooks.map(h => h._id) },
             'data.created_at': { $gte: start.getTime(), $lte: end.getTime() }
         });
 
-        const standardHooks = hooks.filter(hook => !hook.adminHook);
-        const premiumHooks = hooks.filter(hook => hook.adminHook);
+        const standardHooks = uniqueHooks.filter(hook => !hook.adminHook);
+        const premiumHooks = uniqueHooks.filter(hook => hook.adminHook);
 
         const initialData = Array.from({ length: 30 }, (_, i) => {
             const dateKey = new Date(end.getTime() - i * 24 * 60 * 60 * 1000).toISOString().split('T')[0]; 

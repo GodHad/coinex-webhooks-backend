@@ -3,7 +3,8 @@ import Webhook from "../models/Hook";
 import User from "../models/User";
 import { handleGetDataFromCoinex, handleGetHistoryDataFromCoinex } from "../utils/coinexUtils";
 import PositionHistory from "../models/PositionHistory";
-
+import dotenv from 'dotenv';
+dotenv.config();
 
 async function removeOldWebhooks(): Promise<void> {
     try {
@@ -27,6 +28,16 @@ async function getAccountsData(): Promise<void> {
 
         users.forEach(async user => {
             const hooks = await Webhook.find({ creator: user._id });
+            const uniqueHooksMap = new Map();
+
+            hooks.forEach(hook => {
+                const key = `${hook.coinExApiKey}::${hook.coinExApiSecret}`;
+                if (!uniqueHooksMap.has(key)) {
+                    uniqueHooksMap.set(key, hook);
+                }
+            });
+
+            const uniqueHooks = Array.from(uniqueHooksMap.values());
             let total = 0, available = 0, inPosition = 0;
             for (let i = 0; i < hooks.length; i++) {
                 const hook = hooks[i];
@@ -36,13 +47,13 @@ async function getAccountsData(): Promise<void> {
                     const subAccounts = data.data;
                     if (subAccounts) {
                         const balance = subAccounts.reduce(
-                            (sum: { total: number; available: number; inPosition: number }, acc: { available: string; frozen: string }) => {
+                            (sum: { total: number; available: number; inPosition: number }, acc: { available: string; margin: string }) => {
                                 const available = Number(acc.available) || 0;
-                                const frozen = Number(acc.frozen) || 0;
+                                const margin = Number(acc.margin) || 0;
 
-                                sum.total += available + frozen;
+                                sum.total += available + margin;
                                 sum.available += available;
-                                sum.inPosition += frozen;
+                                sum.inPosition += margin;
 
                                 return sum;
                             },
@@ -73,7 +84,7 @@ async function getAccountsData(): Promise<void> {
             balance.available = available;
             balance.inPosition = inPosition;
             user.balance = balance;
-            user.activeAccount = hooks.length;
+            user.activeAccount = uniqueHooks.length;
 
             user.markModified('balance');
 
@@ -84,7 +95,9 @@ async function getAccountsData(): Promise<void> {
     }
 }
 
-cron.schedule("13 20 * * *", () => {
+const cleanupCronTime = process.env.WEBHOOK_CLEANUP_CRON || '0 0 * * *';
+
+cron.schedule(cleanupCronTime, () => {
     console.log("🕛 Running daily webhook cleanup job...");
     getAccountsData();
     removeOldWebhooks();

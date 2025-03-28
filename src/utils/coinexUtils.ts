@@ -288,16 +288,16 @@ export const handleGetDataFromCoinex = async (
 
 export const handleGetHistoryDataFromCoinex = async (
     coinExApiKey: string,
-    coinExApiSecret: string
-): Promise<{ success: boolean; data?: any; error?: any }> => {
-    const timestamp = await getTimestamp();
-    const oneMonthAgo = timestamp - 30 * 24 * 60 * 60 * 1000;
+    coinExApiSecret: string,
+    startTime: number,
+): Promise<{ success: boolean; data?: any; error?: any, lastTimestamp?: number }> => {
     let page = 1;
     let hasNext = true;
     let allData: { position: any; finished: boolean; }[] = [];
 
     try {
         while (hasNext) {
+            const timestamp = await getTimestamp();
             const url = `/v2/futures/pending-position?market_type=FUTURES&page=${page}&limit=100`;
 
             const result = await axios.get('https://api.coinex.com' + url, {
@@ -328,8 +328,11 @@ export const handleGetHistoryDataFromCoinex = async (
         }
 
         page = 1, hasNext = true;
+        let lastTimestamp = 0;
         while (hasNext) {
-            const url = `/v2/futures/finished-position?market_type=FUTURES&start_time=${oneMonthAgo}&page=${page}&limit=100`;
+            const timestamp = await getTimestamp();
+            let url = `/v2/futures/finished-position?market_type=FUTURES&page=${page}&limit=100`;
+            if (startTime) url += `&start_time=${startTime}`
 
             const result = await axios.get('https://api.coinex.com' + url, {
                 headers: {
@@ -355,12 +358,14 @@ export const handleGetHistoryDataFromCoinex = async (
 
             hasNext = responseData.pagination?.has_next || false;
             page++;
+            lastTimestamp = timestamp;
             await delay(500);
         }
 
         return {
             success: true,
             data: allData,
+            lastTimestamp,
         };
     } catch (error: any) {
         return {

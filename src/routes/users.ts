@@ -5,7 +5,7 @@ import Hook from '../models/Hook';
 import History from '../models/History';
 import { JWTRequest } from '../types/JWTRequest';
 import AdminData from '../models/AdminData';
-import PositionHistory from '../models/PositionHistory';
+import PositionHistory, { IPositionHistory } from '../models/PositionHistory';
 import moment from 'moment';
 
 const router = express.Router();
@@ -106,7 +106,6 @@ router.get('/get-overview', jwtAuth, async (req: JWTRequest, res) => {
         }, 0);
 
         const now = new Date();
-        const todayStr = now.toISOString().split('T')[0]; 
         const startOfWeek = new Date(now); 
         startOfWeek.setDate(now.getDate() - now.getDay());
 
@@ -114,7 +113,7 @@ router.get('/get-overview', jwtAuth, async (req: JWTRequest, res) => {
         
         const today = new Date().toISOString().split('T')[0];
 
-        const todayPnl = positionHistories.reduce((sum, history) => {
+        const todayPnl = positionHistories.filter(h => !h.finished).reduce((sum, history) => {
             if (history.data && history.data.realized_pnl !== undefined) {
                 const historyDate = new Date(history.createdAt).toISOString().split('T')[0];
 
@@ -128,13 +127,9 @@ router.get('/get-overview', jwtAuth, async (req: JWTRequest, res) => {
         const pnlStats = positionHistories.reduce((acc, history) => {
             if (history.data && history.data.realized_pnl !== undefined) {
                 const historyDate = new Date(parseInt(history.data.created_at));
-                const historyDateStr = historyDate.toISOString().split('T')[0];
 
                 const pnl = parseFloat(history.data.realized_pnl);
 
-                if (historyDateStr === todayStr) {
-                    acc.daily += pnl;
-                }
                 if (historyDate >= startOfWeek) {
                     acc.weekly += pnl;
                 }
@@ -144,28 +139,19 @@ router.get('/get-overview', jwtAuth, async (req: JWTRequest, res) => {
                 acc.allTime += pnl;
             }
             return acc;
-        }, { daily: 0, weekly: 0, monthly: 0, allTime: 0 });
+        }, { daily: todayPnl, weekly: 0, monthly: 0, allTime: 0 });
 
-        const totalRisk = uniqueHooks.reduce((sum, hook) => {
-            if (hook.leverage && hook.entryPrice) {
-                return sum + (parseFloat(hook.leverage) * parseFloat(hook.entryPrice));
-            }
-            return sum;
-        }, 0);
-
-        const standardTotalRisk = standardHooks.reduce((sum, hook) => {
-            if (hook.leverage && hook.entryPrice) {
-                return sum + (parseFloat(hook.leverage) * parseFloat(hook.entryPrice));
-            }
-            return sum;
-        }, 0);
-
-        const premiumTotalRisk = premiumHooks.reduce((sum, hook) => {
-            if (hook.leverage && hook.entryPrice) {
-                return sum + (parseFloat(hook.leverage) * parseFloat(hook.entryPrice));
-            }
-            return sum;
-        }, 0);
+        const calcRiskFromPositions = (positions: IPositionHistory[]) => {
+            return positions
+                .filter(p => !p.finished && p.data?.margin_avbl && p.data?.maintenance_margin_value)
+                .reduce((sum, p) => {
+                    return sum + (parseFloat(p.data.margin_avbl) - parseFloat(p.data.maintenance_margin_value));
+                }, 0);
+        };
+        
+        const totalRisk = calcRiskFromPositions(positionHistories);
+        const standardTotalRisk = calcRiskFromPositions(standardPositionHistories);
+        const premiumTotalRisk = calcRiskFromPositions(premiumPositionHistories);
 
         return res.status(200).json({
             totalPnl,

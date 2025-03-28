@@ -68,14 +68,16 @@ async function getAccountsData(): Promise<void> {
                     }
                 }
 
-                const historyData = await handleGetHistoryDataFromCoinex(hook.coinExApiKey, hook.coinExApiSecret);
+                const historyData = await handleGetHistoryDataFromCoinex(hook.coinExApiKey, hook.coinExApiSecret, hook.lastRetrieveTime || Date.now());
 
                 if (historyData.success && historyData.data) {
-                    await PositionHistory.deleteMany({ hook: hook._id });
+                    await PositionHistory.deleteMany({ hook: hook._id, finished: false });
                     const histories = historyData.data;
                     const positionHistories = histories.map((history: any) => ({ data: history.position, hook: hook._id, finished: history.finished }));
 
                     await PositionHistory.insertMany(positionHistories);
+                    hook.lastRetrieveTime = historyData.lastTimestamp || Date.now();
+                    await hook.save();
                 }
             }
 
@@ -96,11 +98,16 @@ async function getAccountsData(): Promise<void> {
 }
 
 const cleanupCronTime = process.env.WEBHOOK_CLEANUP_CRON || '0 0 * * *';
+const retrieveAccountDataTime = process.env.WEBHOOK_RETRIEVE_POSITION_DATE_CRON || '0 * * * *';
 
 cron.schedule(cleanupCronTime, () => {
     console.log("🕛 Running daily webhook cleanup job...");
-    getAccountsData();
     removeOldWebhooks();
+});
+
+cron.schedule(retrieveAccountDataTime, () => {
+    console.log("🕛 Running hourly get history job...");
+    getAccountsData();
 });
 
 export { removeOldWebhooks };

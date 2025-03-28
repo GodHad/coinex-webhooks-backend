@@ -24,6 +24,7 @@ export interface IHook extends Document {
         available: number | null;
         inPosition: number | null;
     } | null;
+    lastRetrieveTime: number;
 }
 
 const hookSchema = new Schema<IHook>(
@@ -52,6 +53,7 @@ const hookSchema = new Schema<IHook>(
             },
             default: null,
         },
+        lastRetrieveTime: { type: Number, default: 0 }
     },
     { timestamps: true }
 );

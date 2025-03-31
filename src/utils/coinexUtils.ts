@@ -1,6 +1,7 @@
 import axios from "axios";
 import crypto from 'crypto';
 import History, { IHistory } from "../models/History";
+import { IHook } from "../models/Hook";
 
 const commonURL = 'https://api.coinex.com';
 
@@ -176,7 +177,7 @@ const handleTradeSignal = (action: string, tradeDirection: string, positionState
 };
 
 export const handleTrade = async (
-    webhook: any,
+    webhook: IHook,
     ticker: string,
     action: string,
     amount: string,
@@ -225,6 +226,9 @@ export const handleTrade = async (
             if (success && data.code === 0) {
                 if (isClosing) {
                     webhook.positionState = 'neutral';
+                    webhook.stopLossPrice = '';
+                    webhook.takeProfitPrice = '';
+                    await webhook.save();
                 } else if (tradeAction === 'buy') {
                     webhook.positionState = 'long';
                 } else if (tradeAction === 'sell') {
@@ -232,7 +236,7 @@ export const handleTrade = async (
                 }
             }
         }
-        
+
         await webhook.save();
         await delay(200);
     }
@@ -253,8 +257,109 @@ export const handleTrade = async (
         }
     }
 
+    // if (webhook.adminHook) {
+    //     if (webhook.takeProfitPrice) await handleSetTP(webhook.takeProfitPrice, ticker, webhook.coinExApiKey, webhook.coinExApiSecret);
+    //     if (webhook.stopLossPrice) await handleSetSL(webhook.stopLossPrice, ticker, webhook.coinExApiKey, webhook.coinExApiSecret);
+    // }
+
     return { success: true, message: 'Order placed successfully' };
 };
+
+export const handleSetTP = async (
+    takeProfitPrice: string,
+    symbol: string,
+    coinExApiKey: string,
+    coinExApiSecret: string,
+): Promise<{ success: boolean; message?: string; }> => {
+    const timestamp = await getTimestamp();
+
+    const data = JSON.stringify({
+        market: symbol,
+        market_type: 'FUTURES',
+        take_profit_type: 'mark_price',
+        take_profit_price: takeProfitPrice,
+    });
+
+    try {
+        const result = await axios.post(commonURL + '/v2/futures/set-position-take-profit', data, {
+            headers: {
+                'Content-Type': 'application/json; charset=utf-8',
+                Accept: 'application/json',
+                "X-COINEX-KEY": coinExApiKey,
+                "X-COINEX-SIGN": createAuthorization("POST", "/v2/futures/set-position-take-profit", data, timestamp, coinExApiSecret),
+                "X-COINEX-TIMESTAMP": timestamp,
+            },
+        });
+
+        if (result.data.code === 0) {
+            return {
+                success: true,
+                message: 'Set TP successfully',
+            };
+        }
+
+        console.error(' CoinEx API Request Failed:', result.data);
+
+        return {
+            success: false,
+            message: result.data.message,
+        }
+    } catch (error: any) {
+        console.error('CoinEx API Request Failed:', error.response?.data || error.message);
+        return {
+            success: false,
+            message: 'Failed to set TP',
+        };
+    }
+}
+
+export const handleSetSL = async (
+    stopLossPrice: string,
+    symbol: string,
+    coinExApiKey: string,
+    coinExApiSecret: string,
+): Promise<{ success: boolean; message?: string; }> => {
+    const timestamp = await getTimestamp();
+
+    const data = JSON.stringify({
+        market: symbol,
+        market_type: 'FUTURES',
+        stop_loss_type: 'mark_price',
+        stop_loss_price: stopLossPrice,
+    });
+
+    try {
+        const result = await axios.post(commonURL + '/v2/futures/set-position-stop-loss', data, {
+            headers: {
+                'Content-Type': 'application/json; charset=utf-8',
+                Accept: 'application/json',
+                "X-COINEX-KEY": coinExApiKey,
+                "X-COINEX-SIGN": createAuthorization("POST", "/v2/futures/set-position-stop-loss", data, timestamp, coinExApiSecret),
+                "X-COINEX-TIMESTAMP": timestamp,
+            },
+        });
+
+        if (result.data.code === 0) {
+            return {
+                success: true,
+                message: 'Set SL successfully',
+            };
+        }
+
+        console.error(' CoinEx API Request Failed:', result.data);
+
+        return {
+            success: false,
+            message: result.data.message,
+        }
+    } catch (error: any) {
+        console.error('CoinEx API Request Failed:', error.response?.data || error.message);
+        return {
+            success: false,
+            message: 'Failed to set SL',
+        };
+    }
+}
 
 export const handleGetDataFromCoinex = async (
     coinExApiKey: string,

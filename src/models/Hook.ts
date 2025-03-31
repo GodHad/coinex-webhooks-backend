@@ -42,8 +42,8 @@ const hookSchema = new Schema<IHook>(
         isSubscribed: { type: Boolean, default: false },
         leverage: { type: String },
         entryPrice: { type: String },
-        stopLossPrice: { type: String },
-        takeProfitPrice: { type: String },
+        stopLossPrice: { type: String, default: null },
+        takeProfitPrice: { type: String, default: null },
         currentPrice: { type: String },
         balance: {
             type: {

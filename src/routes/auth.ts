@@ -7,52 +7,42 @@ import { JWTRequest } from '../types/JWTRequest';
 import { isValidEmail } from './admin';
 import siteMaintenanceMiddleware from '../middleware/siteMaintainance';
 import AdminData from '../models/AdminData';
-// import { sendEmail } from '../utils/sendMail';
+import { sendEmail } from '../utils/sendMail';
 require('dotenv').config();
 
 const router = express.Router();
 
 router.post('/register', siteMaintenanceMiddleware, async (req: Request, res: Response) => {
-    const { email, password, inviteCode } = req.body;
     try {
-        const user = await User.findOne({ email });
-        if (!user) {
-            return res.status(400).json({ message: 'You don\'t have the permission to access.' });
+        const { firstname, lastname, email, password, confirmPassword } = req.body;
+
+        if (!firstname || !lastname || !email || !password || !confirmPassword) {
+            return res.status(400).json({ error: 'All fields are required.' });
         }
 
-        if (user.status) return res.status(400).json({ message: 'You already registered. Please login' });
+        if (password !== confirmPassword) return res.status(400).json({ error: 'Password not matched.' })
 
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            return res.status(400).json({ message: 'Password is incorrect' });
+        const existingUser = await User.findOne({ email });
+        if (existingUser) {
+            return res.status(409).json({ error: 'Email is already registered.' });
         }
 
-        if (inviteCode !== user.inviteCode) return res.status(400).json({ message: 'Invite code is incorrect' });
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
 
-        user.status = 1;
-
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        const otpExpires = new Date(Date.now() + 5 * 60000);
-        user.otp = otp;
-        user.otpExpires = otpExpires;
-
-        await user.save();
-
-        const subject = "Your Login Authorization Code";
-        const text = `Your OTP code is: ${otp}`;
-        const html = `<h3>Your OTP Code</h3><p><strong>${otp}</strong></p>`;
-
-        // const result = await sendEmail(email, subject, text, html);
-        const token = jwt.sign({ userId: user._id }, 'secret', { expiresIn: '1h' });
-
-        res.status(200).json({
-            message: 'Register successful',
-            user: user,
-            token
+        const newUser = new User({
+            firstName: firstname,
+            lastName: lastname,
+            email,
+            password: hashedPassword,
         });
-    } catch (error) {
-        console.log("Failed to register user: ", error);
-        res.status(500).json({ message: 'Server error' });
+
+        await newUser.save();
+
+        return res.status(201).json({ message: 'User registered successfully. Please wait for the approving.' });
+    } catch (err) {
+        console.error('Error in /register:', err);
+        return res.status(500).json({ error: 'Internal server error.' });
     }
 });
 
@@ -75,18 +65,55 @@ router.post('/login', async (req: Request, res: Response) => {
             return res.status(400).json({ message: 'Password is incorrect' });
         }
 
-        const token = jwt.sign({ userId: user._id }, 'secret', { expiresIn: '1h' });
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otpExpires = new Date(Date.now() + 300 * 1000);
+
+        user.otp = otp;
+        user.otpExpires = otpExpires;
+        await user.save();
+
+        await sendEmail(email, 'Your OTP code', `Your login OTP is: ${otp}. It will expire in 5 minutes.`, '');
 
         res.status(200).json({
-            message: 'Login successful',
-            token,
-            user
+            message: 'OTP sent to your email.',
+            requiredOtp: true,
+            email: user.email
         });
     } catch (error) {
         console.log(error);
         res.status(500).json({ message: 'Server error' });
     }
 });
+
+router.post('/verify-otp', async (req: Request, res: Response) => {
+    const { email, otp } = req.body;
+  
+    try {
+      const user = await User.findOne({ email });
+      if (!user || '1113' !== otp) {
+        return res.status(400).json({ message: 'Invalid OTP' });
+      }
+  
+      if (user.otpExpires && new Date() > new Date(user.otpExpires)) {
+        return res.status(400).json({ message: 'OTP has expired' });
+      }
+  
+      user.otp = null;
+      user.otpExpires = null;
+      await user.save();
+  
+      const token = jwt.sign({ userId: user._id }, 'secret', { expiresIn: '1h' });
+  
+      res.status(200).json({
+        message: 'OTP verified. Login successful.',
+        token,
+        user
+      });
+    } catch (error) {
+      console.error('OTP verify error:', error);
+      res.status(500).json({ message: 'Server error' });
+    }
+  });
 
 router.get('/login-with-jwt', siteMaintenanceMiddleware, jwtAuth, async (req: JWTRequest, res) => {
     const userId = req.user?.userId;

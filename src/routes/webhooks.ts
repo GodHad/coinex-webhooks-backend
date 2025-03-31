@@ -9,7 +9,7 @@ import { jwtAuth } from '../middleware/authorization';
 import webhooksMaintenanceMiddleware from '../middleware/webhooksMaintenance';
 import ArtemHistory from '../models/Artem';
 import { getTimestamp, sign, preHash } from '../utils/bitgetUtils';
-import { checkOrderExisting, handleTrade } from '../utils/coinexUtils';
+import { handleTrade } from '../utils/coinexUtils';
 
 require("dotenv").config("../.env");
 

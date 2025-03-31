@@ -8,6 +8,7 @@ import AdminHook from '../models/AdminHook';
 import History from '../models/History';
 import siteMaintenanceMiddleware from '../middleware/siteMaintainance';
 import PositionHistory from '../models/PositionHistory';
+import { handleSetSL, handleSetTP } from '../utils/coinexUtils';
 
 const router = express.Router();
 
@@ -32,7 +33,7 @@ router.get('/', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRequest, res)
 });
 
 router.post('/create', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRequest, res) => {
-    const { coinExApiKey, coinExApiSecret, name, tradeDirection, isUsingAdminHook } = req.body;
+    const { coinExApiKey, coinExApiSecret, name, tradeDirection, takeProfitPrice, stopLossPrice, isUsingAdminHook } = req.body;
 
     try {
         const userId = req.user?.userId;
@@ -74,6 +75,8 @@ router.post('/create', jwtAuth, siteMaintenanceMiddleware, async (req: JWTReques
             coinExApiKey,
             coinExApiSecret,
             tradeDirection,
+            takeProfitPrice,
+            stopLossPrice,
             isSubscribed,
             amount: req.body.amount || 0
         });
@@ -98,7 +101,7 @@ router.post('/create', jwtAuth, siteMaintenanceMiddleware, async (req: JWTReques
 
 
 router.put('/update/:id', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRequest, res) => {
-    const { coinExApiKey, coinExApiSecret, name, status, tradeDirection, isUsingAdminHook } = req.body;
+    const { coinExApiKey, coinExApiSecret, name, status, tradeDirection, takeProfitPrice, stopLossPrice, isUsingAdminHook } = req.body;
     const { id } = req.params;
 
     try {
@@ -115,11 +118,16 @@ router.put('/update/:id', jwtAuth, siteMaintenanceMiddleware, async (req: JWTReq
             return res.status(403).json({ message: 'You are not allowed this action' });
         }
 
+        const existingHook = await Hook.findById(id);
+        if (!existingHook) return res.status(404).json({ message: 'Hook not found' });
+
         const updatePayload: any = {
             coinExApiKey,
             coinExApiSecret,
             name,
             tradeDirection,
+            takeProfitPrice,
+            stopLossPrice,
             status,
         };
 
@@ -134,10 +142,11 @@ router.put('/update/:id', jwtAuth, siteMaintenanceMiddleware, async (req: JWTReq
             if (!req.body.adminHook) {
                 return res.status(400).json({ message: 'Admin hook must be provided when using adminHook.' });
             }
-            const existingHook = await AdminHook.findById(req.body.adminHook);
-            if (!existingHook) {
+            const existingAdminHook = await AdminHook.findById(req.body.adminHook);
+            if (!existingAdminHook) {
                 return res.status(404).json({ message: 'Hook not found' });
             }
+
             updatePayload.adminHook = req.body.adminHook;
             updatePayload.amount = req.body.amount || 0;
             updatePayload.$unset = { url: '' };
@@ -149,7 +158,30 @@ router.put('/update/:id', jwtAuth, siteMaintenanceMiddleware, async (req: JWTReq
             { new: true }
         );
 
+        if (isUsingAdminHook) {
+            const existingAdminHook = await AdminHook.findById(req.body.adminHook);
+            if (!existingAdminHook) {
+                return res.status(404).json({ message: 'Hook not found' });
+            }
+
+            const changes = {
+                takeProfitPrice: takeProfitPrice !== existingHook.takeProfitPrice,
+                stopLossPrice: stopLossPrice !== existingHook.stopLossPrice,
+            }
+
+            if (changes.takeProfitPrice) {
+                const result = await handleSetTP(takeProfitPrice, existingAdminHook.pair.replace('/', ''), existingHook.coinExApiKey, existingHook.coinExApiSecret);
+                if (!result.success) return res.status(400).json({ message: result.message });
+            }
+
+            if (changes.stopLossPrice) {
+                const result = await handleSetSL(stopLossPrice, existingAdminHook.pair.replace('/', ''), existingHook.coinExApiKey, existingHook.coinExApiSecret);
+                if (!result.success) return res.status(400).json({ message: result.message });
+            }
+        }
+
         const updatedHook = await Hook.findByIdAndUpdate(id, updatePayload, { new: true }).populate('adminHook');
+
 
         return res.status(200).json({
             message: 'Update hook successful',
@@ -233,20 +265,20 @@ router.get('/admin-hooks', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRe
 
                 const userHistories7d = await PositionHistory.find({
                     hook: userHook?._id,
-                    'data.created_at': { 
-                        $gt: last7dStart, 
+                    'data.created_at': {
+                        $gt: last7dStart,
                         $lt: now
                     }
                 });
-                
-                const dailyPnl: { [key: string]: number } = {}; 
-                const dailyInvest: { [key: string]: number } = {}; 
-                
+
+                const dailyPnl: { [key: string]: number } = {};
+                const dailyInvest: { [key: string]: number } = {};
+
                 userHistories7d.forEach(history => {
                     if (history.data?.realized_pnl) {
                         const dateKey = new Date(parseInt(history.data.created_at)).toISOString().split('T')[0]; // Extract YYYY-MM-DD
                         const pnl = parseFloat(history.data.realized_pnl);
-                        
+
                         if (!dailyPnl[dateKey]) {
                             dailyPnl[dateKey] = 0;
                         }
@@ -254,27 +286,27 @@ router.get('/admin-hooks', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRe
                         if (!dailyInvest[dateKey]) {
                             dailyInvest[dateKey] = 0;
                         }
-                        
+
                         dailyPnl[dateKey] += pnl;
                         dailyInvest[dateKey] += Number(history.data.avg_entry_price) * Number(history.data.ath_position_amount);
                     }
                 });
-                
+
                 const labels = [];
                 const values = [];
                 for (let i = 6; i >= 0; i--) {
                     const date = new Date(now - i * 24 * 60 * 60 * 1000);
                     const dateKey = date.toISOString().split('T')[0];
-                
+
                     labels.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
-                    
+
                     const pnl = dailyPnl[dateKey] || 0;
                     const initialInvestment = dailyInvest[dateKey] || 1;
                     const pnlPercent = (pnl / initialInvestment) * 100;
-                
+
                     values.push(parseFloat(pnlPercent.toFixed(2)));
                 }
-                
+
                 const performanceData = { labels, values };
 
                 const communityStats = {

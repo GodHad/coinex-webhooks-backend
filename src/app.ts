@@ -9,9 +9,10 @@ import historyRoutes from './routes/histories';
 import userRoutes from './routes/users';
 import adminRoutes from './routes/admin';
 import './cron/cronJobs';
+require("dotenv").config("../.env");
 
 const app = express();
-const PORT = 5050;
+const PORT = process.env.PORT || 5050;
 
 app.use(cors());
 

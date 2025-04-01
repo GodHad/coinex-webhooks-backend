@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-import Hook from "../models/Hook";
 
 require("dotenv").config("../.env");
 const DB_CONNECTION = process.env.MONGODB_URI;

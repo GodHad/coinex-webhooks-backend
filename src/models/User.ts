@@ -32,12 +32,10 @@ const userSchema = new Schema<IUser>(
         subscribed: { type: Number, default: 0 },
         subscribeEndDate: { type: Date },
         isAdmin: { type: Boolean, default: false },
-        inviteCode: { type: String },
         status: { type: Number, default: 0 },
         otp: { type: String, default: null },
         otpExpires: { type: Date, default: null },
         activeAccount: { type: Number, default: null },
-
         balance: {
             type: {
                 total: { type: Number, default: null },

@@ -24,6 +24,22 @@ router.post('/register', siteMaintenanceMiddleware, async (req: Request, res: Re
 
         const existingUser = await User.findOne({ email });
         if (existingUser) {
+            if (!existingUser.otp || !existingUser.otpExpires || new Date() > new Date(existingUser.otpExpires)) {
+                const otp = Math.floor(100000 + Math.random() * 900000).toString();
+                const otpExpires = new Date(Date.now() + 300 * 1000); // 5 mins
+
+                existingUser.otp = otp;
+                existingUser.otpExpires = otpExpires;
+                await existingUser.save();
+
+                await sendEmail(email, 'Your new OTP', `Your OTP is ${otp}. It will expire in 5 minutes.`, '');
+
+                return res.status(200).json({
+                    message: 'OTP has been resent to your email.',
+                    requiredOtp: true,
+                    email: existingUser.email
+                });
+            }
             return res.status(409).json({ error: 'Email is already registered.' });
         }
 
@@ -37,9 +53,20 @@ router.post('/register', siteMaintenanceMiddleware, async (req: Request, res: Re
             password: hashedPassword,
         });
 
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+        const otpExpires = new Date(Date.now() + 300 * 1000);
+
+        newUser.otp = otp;
+        newUser.otpExpires = otpExpires;
         await newUser.save();
 
-        return res.status(201).json({ message: 'User registered successfully. Please wait for the approving.' });
+        await sendEmail(email, 'Verify your account', `Your OTP is: ${otp}. It will expire in 5 minutes.`, '');
+
+        return res.status(201).json({
+            message: 'User registered. Please verify OTP sent to your email.',
+            requiredOtp: true,
+            email: newUser.email
+        });
     } catch (err) {
         console.error('Error in /register:', err);
         return res.status(500).json({ error: 'Internal server error.' });
@@ -65,19 +92,12 @@ router.post('/login', async (req: Request, res: Response) => {
             return res.status(400).json({ message: 'Password is incorrect' });
         }
 
-        const otp = Math.floor(100000 + Math.random() * 900000).toString();
-        const otpExpires = new Date(Date.now() + 300 * 1000);
-
-        user.otp = otp;
-        user.otpExpires = otpExpires;
-        await user.save();
-
-        await sendEmail(email, 'Your OTP code', `Your login OTP is: ${otp}. It will expire in 5 minutes.`, '');
+        const token = jwt.sign({ userId: user._id }, 'secret', { expiresIn: '1h' });
 
         res.status(200).json({
-            message: 'OTP sent to your email.',
-            requiredOtp: true,
-            email: user.email
+            message: 'Login successful.',
+            token,
+            user
         });
     } catch (error) {
         console.log(error);
@@ -87,33 +107,34 @@ router.post('/login', async (req: Request, res: Response) => {
 
 router.post('/verify-otp', async (req: Request, res: Response) => {
     const { email, otp } = req.body;
-  
+
     try {
-      const user = await User.findOne({ email });
-      if (!user || user.otp !== otp) {
-        return res.status(400).json({ message: 'Invalid OTP' });
-      }
-  
-      if (user.otpExpires && new Date() > new Date(user.otpExpires)) {
-        return res.status(400).json({ message: 'OTP has expired' });
-      }
-  
-      user.otp = null;
-      user.otpExpires = null;
-      await user.save();
-  
-      const token = jwt.sign({ userId: user._id }, 'secret', { expiresIn: '1h' });
-  
-      res.status(200).json({
-        message: 'OTP verified. Login successful.',
-        token,
-        user
-      });
+        const user = await User.findOne({ email });
+        if (!user || user.otp !== otp) {
+            return res.status(400).json({ message: 'Invalid OTP' });
+        }
+
+        if (user.otpExpires && new Date() > new Date(user.otpExpires)) {
+            return res.status(400).json({ message: 'OTP has expired' });
+        }
+
+        user.otp = null;
+        user.otpExpires = null;
+        user.status = 1;
+        await user.save();
+
+        const token = jwt.sign({ userId: user._id }, 'secret', { expiresIn: '1h' });
+
+        res.status(200).json({
+            message: 'OTP verified. Login successful.',
+            token,
+            user
+        });
     } catch (error) {
-      console.error('OTP verify error:', error);
-      res.status(500).json({ message: 'Server error' });
+        console.error('OTP verify error:', error);
+        res.status(500).json({ message: 'Server error' });
     }
-  });
+});
 
 router.get('/login-with-jwt', siteMaintenanceMiddleware, jwtAuth, async (req: JWTRequest, res) => {
     const userId = req.user?.userId;

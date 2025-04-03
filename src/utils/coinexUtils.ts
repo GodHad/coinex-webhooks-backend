@@ -276,11 +276,6 @@ export const handleTrade = async (
         }
     }
 
-    // if (webhook.adminHook) {
-    //     if (webhook.takeProfitPrice) await handleSetTP(webhook.takeProfitPrice, ticker, webhook.coinExApiKey, webhook.coinExApiSecret);
-    //     if (webhook.stopLossPrice) await handleSetSL(webhook.stopLossPrice, ticker, webhook.coinExApiKey, webhook.coinExApiSecret);
-    // }
-
     return { success: true, message: 'Order placed successfully' };
 };
 

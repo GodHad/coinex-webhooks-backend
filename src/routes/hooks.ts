@@ -8,7 +8,6 @@ import AdminHook from '../models/AdminHook';
 import History from '../models/History';
 import siteMaintenanceMiddleware from '../middleware/siteMaintainance';
 import PositionHistory from '../models/PositionHistory';
-import { handleSetSL, handleSetTP } from '../utils/coinexUtils';
 
 const router = express.Router();
 
@@ -101,7 +100,7 @@ router.post('/create', jwtAuth, siteMaintenanceMiddleware, async (req: JWTReques
 
 
 router.put('/update/:id', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRequest, res) => {
-    const { coinExApiKey, coinExApiSecret, name, status, tradeDirection, takeProfitPrice, stopLossPrice, isUsingAdminHook } = req.body;
+    const { coinExApiKey, coinExApiSecret, name, status, tradeDirection, /*takeProfitPrice, stopLossPrice,*/ isUsingAdminHook } = req.body;
     const { id } = req.params;
 
     try {
@@ -126,8 +125,8 @@ router.put('/update/:id', jwtAuth, siteMaintenanceMiddleware, async (req: JWTReq
             coinExApiSecret,
             name,
             tradeDirection,
-            takeProfitPrice,
-            stopLossPrice,
+            // takeProfitPrice,
+            // stopLossPrice,
             status,
         };
 
@@ -164,20 +163,20 @@ router.put('/update/:id', jwtAuth, siteMaintenanceMiddleware, async (req: JWTReq
                 return res.status(404).json({ message: 'Hook not found' });
             }
 
-            const changes = {
-                takeProfitPrice: takeProfitPrice !== existingHook.takeProfitPrice,
-                stopLossPrice: stopLossPrice !== existingHook.stopLossPrice,
-            }
+            // const changes = {
+            //     takeProfitPrice: takeProfitPrice !== existingHook.takeProfitPrice,
+            //     stopLossPrice: stopLossPrice !== existingHook.stopLossPrice,
+            // }
 
-            if (changes.takeProfitPrice) {
-                const result = await handleSetTP(takeProfitPrice, existingAdminHook.pair.replace('/', ''), existingHook.coinExApiKey, existingHook.coinExApiSecret);
-                if (!result.success) return res.status(400).json({ message: result.message });
-            }
+            // if (changes.takeProfitPrice) {
+            //     const result = await handleSetTP(takeProfitPrice, existingAdminHook.pair.replace('/', ''), existingHook.coinExApiKey, existingHook.coinExApiSecret);
+            //     if (!result.success) return res.status(400).json({ message: result.message });
+            // }
 
-            if (changes.stopLossPrice) {
-                const result = await handleSetSL(stopLossPrice, existingAdminHook.pair.replace('/', ''), existingHook.coinExApiKey, existingHook.coinExApiSecret);
-                if (!result.success) return res.status(400).json({ message: result.message });
-            }
+            // if (changes.stopLossPrice) {
+            //     const result = await handleSetSL(stopLossPrice, existingAdminHook.pair.replace('/', ''), existingHook.coinExApiKey, existingHook.coinExApiSecret);
+            //     if (!result.success) return res.status(400).json({ message: result.message });
+            // }
         }
 
         const updatedHook = await Hook.findByIdAndUpdate(id, updatePayload, { new: true }).populate('adminHook');

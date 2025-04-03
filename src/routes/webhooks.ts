@@ -72,7 +72,7 @@ router.post('/:webhookUrl', webhooksMaintenanceMiddleware, async (req, res) => {
             });
         }
 
-        const webhook = await Hook.findOne({ url: webhookUrl, isSubscribed: true });
+        const webhook = await Hook.findOne({ url: webhookUrl, isSubscribed: true }).populate<{ creator: IUser }>('creator');;
         if (!webhook || webhook.status === 1) {
             return res.status(400).json({ message: 'Webhook URL is not available or disabled' });
         }
@@ -212,7 +212,7 @@ router.post('/:username/:webhookUrl', webhooksMaintenanceMiddleware, async (req,
         const { ticker, action, amount, exchange } = req.body;
 
         const user = await User.findOne({ email: username });
-        const webhook = await Hook.findOne({ url: webhookUrl, creator: user?._id });
+        const webhook = await Hook.findOne({ url: webhookUrl, creator: user?._id }).populate<{ creator: IUser }>('creator');
         if (!webhook || webhook.status === 1) {
             return res.status(400).json({ message: 'Webhook URL is not available or disabled' });
         }
@@ -239,7 +239,7 @@ router.get('/resend/:id', jwtAuth, webhooksMaintenanceMiddleware, async (req, re
 
     try {
         const history = await History.findById(id);
-        const webhook = await Hook.findById(history?.hook);
+        const webhook = await Hook.findById(history?.hook).populate<{ creator: IUser }>('creator');
 
         if (history && webhook) {
             const result = await handleTrade(webhook, history.symbol, history.action, history.amount, history);

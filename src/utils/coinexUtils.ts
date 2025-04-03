@@ -1,7 +1,9 @@
 import axios from "axios";
 import crypto from 'crypto';
 import History, { IHistory } from "../models/History";
-import { IHook } from "../models/Hook";
+import Hook, { IHook } from "../models/Hook";
+import { sendEmail } from "./sendMail";
+import User from "../models/User";
 
 const commonURL = 'https://api.coinex.com';
 
@@ -187,6 +189,7 @@ export const handleTrade = async (
         action: history.action,
         isClosing: history.positionState !== 'neutral'
     }] : handleTradeSignal(action, webhook.tradeDirection, webhook.positionState);
+    const user = await User.findById(webhook.creator._id || webhook.creator);
 
     for (const { action: tradeAction, isClosing } of requiredActions) {
         const { success, data, error } = await placeOrderOnCoinEx(
@@ -203,6 +206,14 @@ export const handleTrade = async (
             history.resendStatus = success;
             history.resendResult = data || null;
             history.resendError = error || null;
+            if (user && data.code !== 0) {
+                await sendEmail(
+                    user?.email, 
+                    'Trade Failed - Retrying',
+                    `The ${history.action.toUpperCase()} for ${history.symbol} failed again (error code:${data.code}). \n Error message: ${data.message}`,
+                    ''
+                )
+            }
             await history.save();
         } else {
             const newHistory = new History({
@@ -220,6 +231,14 @@ export const handleTrade = async (
             await delay(100);
 
             if (data && data.code !== 0) {
+                if (user) {
+                    await sendEmail(
+                        user?.email, 
+                        'Trade Failed - Retrying',
+                        `The ${newHistory.action.toUpperCase()} for ${newHistory.symbol} failed (error code:${data.code}). Retrying the trade now...`,
+                        ''
+                    )
+                }
                 await handleTrade(webhook, newHistory.symbol, newHistory.action, newHistory.amount, newHistory);
             }
 

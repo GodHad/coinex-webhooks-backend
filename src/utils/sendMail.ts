@@ -12,7 +12,7 @@ const mg = mailgun.client({
 export const sendEmail = async (to: string, subject: string, text: string, html: string) => {
     try {
         const data = {
-            from: 'SIGNALIZE <no-reply@www.signalyze.net>',
+            from: 'SIGNALYZE <no-reply@www.signalyze.net>',
             to,
             subject,
             text,

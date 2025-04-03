@@ -2,11 +2,9 @@ import express from 'express';
 import { adminAuth, jwtAuth } from '../middleware/authorization';
 import User from '../models/User';
 import Hook from '../models/Hook';
-import History from '../models/History';
 import { JWTRequest } from '../types/JWTRequest';
 import AdminData from '../models/AdminData';
 import PositionHistory, { IPositionHistory } from '../models/PositionHistory';
-import moment from 'moment';
 
 const router = express.Router();
 
@@ -245,8 +243,7 @@ router.get('/get-pnl-last-30-days', jwtAuth, async (req: JWTRequest, res) => {
 
 router.get('/homepage', async (req, res) => {
     try {
-        const adminData = await AdminData.findOne({}, 'mainTitle subTitle featuredCardTitle featuredCardDescription featuredCardTitle1 featuredCardDescription1 featuredCardTitle2 featuredCardDescription2 siteMaintainanceMode');
-        console.log("homepage", adminData)
+        const adminData = await AdminData.findOne({}, 'mainTitle subTitle featuredCardTitle featuredCardDescription featuredCardTitle1 featuredCardDescription1 featuredCardTitle2 featuredCardDescription2 siteMaintainanceMode totalPremiumSignals totalBalance totalTrades averageWinRate averageProfit totalPNL');
         return res.status(200).json({
             data: adminData,
             message: 'Get Homepage data successful',

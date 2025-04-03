@@ -288,7 +288,13 @@ router.post('/update-admin-data', adminAuth, async (req, res) => {
             features, 
             siteMaintainanceMode, 
             webhooksMaintainanceMode, 
-            allowSignup 
+            allowSignup, 
+            totalPremiumSignals,
+            totalBalance,
+            totalTrades,
+            averageWinRate,
+            averageProfit,
+            totalPNL
         } = req.body;
         const data = await AdminData.findOneAndUpdate({}, {
             twitter,
@@ -309,6 +315,12 @@ router.post('/update-admin-data', adminAuth, async (req, res) => {
             siteMaintainanceMode,
             webhooksMaintainanceMode,
             allowSignup,
+            totalPremiumSignals,
+            totalBalance,
+            totalTrades,
+            averageWinRate,
+            averageProfit,
+            totalPNL
             // inviteCodes
         }, { new: true });
         res.status(200).json({
@@ -337,8 +349,6 @@ router.get('/exchanges', adminAuth, async (req, res) => {
 router.post('/add-exchange', adminAuth, async (req, res) => {
     try {
         const { name, logo, description, pros, cons, rating, tradingFee, leverage, minDeposit, assets, enabled, affiliateLink } = req.body;
-
-        console.log(req.body);
 
         // Create new ExchangePartner entry
         const newExchange = new ExchangePartner({

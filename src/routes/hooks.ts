@@ -199,6 +199,8 @@ router.delete('/:id', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRequest
 
     try {
         await Hook.findByIdAndDelete(id);
+        await History.deleteMany({ hook: id });
+        await PositionHistory.deleteMany({ hook: id }); 
         await User.findByIdAndUpdate(
             userId,
             { $set: { updatedAt: new Date() } },

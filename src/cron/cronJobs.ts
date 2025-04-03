@@ -176,4 +176,4 @@ cron.schedule(retrieveAccountDataTime, () => {
     getAccountsData();
 });
 
-export { removeOldWebhooks };
+export { removeOldWebhooks, getAccountsData };

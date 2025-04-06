@@ -59,7 +59,7 @@ const placeOrderOnCoinEx = async (
     if (isClosing) {
         const pendingOrders = await checkOrderExisting(symbol, action, coinExApiKey, coinExApiSecret);
         const side = action === 'buy' ? 'short' : 'long';
-        console.log(pendingOrders, side, action)
+
         if (pendingOrders.filter((o: any) => o.side === side).length === 0) {
             return {
                 success: false,

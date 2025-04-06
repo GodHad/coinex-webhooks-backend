@@ -131,7 +131,6 @@ router.post('/artem/bitget1515', async (req, res) => {
             if (isClosed) return res.status(200).json({ message: 'success', closed: true });
 
             const totalSize = historySinceLatest.reduce((sum, record) => sum + Number(record.size), 0);
-            console.log(apiCount, historySinceLatest, totalSize)
 
             const postParams = {
                 symbol: 'SBTCSUSDT',

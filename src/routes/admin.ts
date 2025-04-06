@@ -48,8 +48,12 @@ router.get('/all-hooks', adminAuth, async (req, res) => {
 router.post('/hooks/create', adminAuth, async (req: JWTRequest, res) => {
     const { pair, timeframe, riskLevel, imageUrl, recommendedLeverage, description } = req.body;
     try {
-        console.log(req.body)
         const userId = req.user?.userId;
+        
+        const isValidPair = (value: string) => /^[A-Z]{2,10}\/[A-Z]{2,10}$/.test(value);
+        if (!pair || !isValidPair(pair)) {
+            return res.status(400).json({ message: 'Invalid pair format. Use e.g. BTC/USD' });
+        }
 
         const url = uuidv4();
 
@@ -198,16 +202,6 @@ router.get('/overview', adminAuth, async (req: JWTRequest, res) => {
             ? ((currentMonthPnl - lastMonthPnl) / Math.abs(lastMonthPnl)) * 100
             : (currentMonthPnl > 0 ? 100 : 0);
 
-        console.log('overview', {
-            totalUsers,
-            totalUsersChange: calculateRate(totalUsersCurrentMonth, totalUsersPreviousMonth),
-            totalPremiumUsers,
-            totalPremiumUsersChange: calculateRate(totalPremiumUsersCurrentMonth, totalPremiumUsersPreviousMonth),
-            activeWebhooks,
-            activeWebhooksChange: calculateRate(activeWebhooksCurrentMonth, activeWebhooksPreviousMonth),
-            currentMonthPnl,
-            pnlRateChange,
-        })
         return res.status(200).json({
             totalUsers,
             totalUsersChange: calculateRate(totalUsersCurrentMonth, totalUsersPreviousMonth),
@@ -382,8 +376,6 @@ router.post('/add-exchange', adminAuth, async (req, res) => {
 router.post('/update-exchange', adminAuth, async (req, res) => {
     try {
         const {_id, name, logo, description, pros, cons, rating, tradingFee, leverage, minDeposit, assets, enabled, affiliateLink } = req.body;
-
-        console.log(req.body);
 
         // Create new ExchangePartner entry
         const data = await ExchangePartner.findOneAndUpdate({_id}, {

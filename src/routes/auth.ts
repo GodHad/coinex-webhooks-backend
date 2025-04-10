@@ -79,7 +79,7 @@ router.post('/login', async (req: Request, res: Response) => {
     try {
         const user = await User.findOne({ email });
         if (!user) {
-            return res.status(400).json({ message: 'Password is incorrect' });
+            return res.status(400).json({ message: 'User does not exist' });
         }
 
         if (!user.status) return res.status(400).json({ message: 'Please request access to login' });

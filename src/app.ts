@@ -1,6 +1,7 @@
 import { createServer } from "http";
 import express from 'express';
 import cors from 'cors';
+
 import { init } from "./db/dbConnection";
 import authRoutes from './routes/auth';
 import hooksRoutes from './routes/hooks';
@@ -8,6 +9,8 @@ import webhooksRoutes from './routes/webhooks';
 import historyRoutes from './routes/histories';
 import userRoutes from './routes/users';
 import adminRoutes from './routes/admin';
+import p2pRoutes from './routes/p2p';
+
 import './cron/cronJobs';
 require("dotenv").config("../.env");
 
@@ -24,6 +27,7 @@ app.use('/api/webhooks', webhooksRoutes);
 app.use('/api/histories', historyRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/p2p', p2pRoutes);
 
 const startServer = async () => {
     try {

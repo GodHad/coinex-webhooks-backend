@@ -9,6 +9,7 @@ import AdminData from '../models/AdminData';
 import History from '../models/History';
 import bcrypt from 'bcryptjs';
 import ExchangePartner from '../models/ExchangePartner';
+import P2PHook from '../models/P2PHook';
 
 const router = express.Router();
 
@@ -49,7 +50,7 @@ router.post('/hooks/create', adminAuth, async (req: JWTRequest, res) => {
     const { pair, timeframe, riskLevel, imageUrl, recommendedLeverage, description } = req.body;
     try {
         const userId = req.user?.userId;
-        
+
         const isValidPair = (value: string) => /^[A-Z]{2,10}\/[A-Z]{2,10}$/.test(value);
         if (!pair || !isValidPair(pair)) {
             return res.status(400).json({ message: 'Invalid pair format. Use e.g. BTC/USD' });
@@ -176,7 +177,7 @@ router.get('/overview', adminAuth, async (req: JWTRequest, res) => {
         const histories = await History.find();
 
         const currentYear = now.getFullYear();
-        const currentMonth = now.getMonth() + 1; // JS months are 0-based, so add 1
+        const currentMonth = now.getMonth() + 1;
 
         const lastMonth = currentMonth === 1 ? 12 : currentMonth - 1;
         const lastMonthYear = currentMonth === 1 ? currentYear - 1 : currentYear;
@@ -269,20 +270,20 @@ router.get('/admin-data', adminAuth, async (req, res) => {
 
 router.post('/update-admin-data', adminAuth, async (req, res) => {
     try {
-        const { 
-            twitter, 
-            instagram, 
-            discord, 
-            telegram, 
-            favicon, 
-            pageTitle, 
-            sidebarTitle, 
-            mainTitle, 
-            subTitle, 
-            features, 
-            siteMaintainanceMode, 
-            webhooksMaintainanceMode, 
-            allowSignup, 
+        const {
+            twitter,
+            instagram,
+            discord,
+            telegram,
+            favicon,
+            pageTitle,
+            sidebarTitle,
+            mainTitle,
+            subTitle,
+            features,
+            siteMaintainanceMode,
+            webhooksMaintainanceMode,
+            allowSignup,
             totalPremiumSignals,
             totalBalance,
             totalTrades,
@@ -375,10 +376,10 @@ router.post('/add-exchange', adminAuth, async (req, res) => {
 
 router.post('/update-exchange', adminAuth, async (req, res) => {
     try {
-        const {_id, name, logo, description, pros, cons, rating, tradingFee, leverage, minDeposit, assets, enabled, affiliateLink } = req.body;
+        const { _id, name, logo, description, pros, cons, rating, tradingFee, leverage, minDeposit, assets, enabled, affiliateLink } = req.body;
 
         // Create new ExchangePartner entry
-        const data = await ExchangePartner.findOneAndUpdate({_id}, {
+        const data = await ExchangePartner.findOneAndUpdate({ _id }, {
             name,
             logo,
             description,
@@ -421,13 +422,41 @@ router.post('/toggle-exchange/:id', adminAuth, async (req, res) => {
             exchange.enabled = !exchange.enabled;
             await exchange.save();
             return res.status(200).json({ message: 'Delete successful' });
-        } 
-        
+        }
+
         return res.status(400).json({ message: 'Can\'t find exchange partner' });
     } catch (error) {
         console.error("Error during deleting hook: ", error);
         return res.status(500).json({ message: 'Server error' });
     }
-})
+});
+
+router.get('/p2p-signals', adminAuth, async (req, res) => {
+    try {
+        const { status, page } = req.query;
+        
+        const filter: { status?: number } = {};
+        
+        if (status) filter.status = Number(status);
+
+        const p2pHooks = await P2PHook.find(filter).populate('creator').skip((Number(page) - 1) * 10).limit(10);
+
+        const totalItems = await P2PHook.countDocuments(filter);
+
+        return res.status(200).json({
+            success: true,
+            signals: p2pHooks.map(h => ({...h.toObject(), tags: h.tags.split(',')})),
+            pagination: {
+                currentPage: Number(page) <= Math.ceil(totalItems / 10)  ? Number(page) : 1,
+                perPage: 10,
+                totalPages: Math.ceil(totalItems / 10),
+                totalItems,
+            }
+        })
+    } catch (error) {
+        console.error("Error during getting p2p hook: ", error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
 
 export default router;

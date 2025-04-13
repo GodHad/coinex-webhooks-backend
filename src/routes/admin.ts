@@ -47,7 +47,7 @@ router.get('/all-hooks', adminAuth, async (req, res) => {
 })
 
 router.post('/hooks/create', adminAuth, async (req: JWTRequest, res) => {
-    const { pair, timeframe, riskLevel, imageUrl, recommendedLeverage, description } = req.body;
+    const { name, pair, timeframe, riskLevel, imageUrl, recommendedLeverage, description } = req.body;
     try {
         const userId = req.user?.userId;
 
@@ -59,7 +59,7 @@ router.post('/hooks/create', adminAuth, async (req: JWTRequest, res) => {
         const url = uuidv4();
 
         const newHook = new AdminHook({
-            name: timeframe + ' ' + pair,
+            name,
             pair,
             url,
             timeframe,
@@ -88,14 +88,14 @@ router.post('/hooks/create', adminAuth, async (req: JWTRequest, res) => {
 });
 
 router.put('/hooks/update/:id', adminAuth, async (req: JWTRequest, res) => {
-    const { pair, timeframe, riskLevel, enabled, imageUrl, recommendedLeverage, description } = req.body;
+    const { name, pair, timeframe, riskLevel, enabled, imageUrl, recommendedLeverage, description } = req.body;
     const id = req.params.id;
     const userId = req.user?.userId
 
     try {
         const dependingHooks = await Hook.find({ adminHook: id });
 
-        const updatedHook = await AdminHook.findByIdAndUpdate(id, { name: timeframe + ' ' + pair, pair, timeframe, riskLevel, enabled, imageUrl, recommendedLeverage, description }, { new: true });
+        const updatedHook = await AdminHook.findByIdAndUpdate(id, { name, pair, timeframe, riskLevel, enabled, imageUrl, recommendedLeverage, description }, { new: true });
         await User.findByIdAndUpdate(
             userId,
             { $set: { updatedAt: new Date() } },

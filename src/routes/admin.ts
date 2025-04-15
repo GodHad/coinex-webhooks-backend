@@ -10,6 +10,7 @@ import History from '../models/History';
 import bcrypt from 'bcryptjs';
 import ExchangePartner from '../models/ExchangePartner';
 import P2PHook from '../models/P2PHook';
+import PositionHistory from '../models/PositionHistory';
 
 const router = express.Router();
 
@@ -434,20 +435,53 @@ router.post('/toggle-exchange/:id', adminAuth, async (req, res) => {
 router.get('/p2p-signals', adminAuth, async (req, res) => {
     try {
         const { status, page } = req.query;
-        
+
         const filter: { status?: number } = {};
-        
+
         if (status) filter.status = Number(status);
 
         const p2pHooks = await P2PHook.find(filter).populate('creator').skip((Number(page) - 1) * 10).limit(10);
 
         const totalItems = await P2PHook.countDocuments(filter);
 
+        const hookIds = p2pHooks.map(h => h._id);
+
+        const p2pSignals = await Promise.all(p2pHooks.map(async hook => {
+            try {
+                const histories = await PositionHistory.find({ hook: { $in: hookIds } });
+                let totalPnl = 0, totalWins = 0;
+                if (histories.length > 0) {
+                    histories.forEach(history => {
+                        if (history.data?.realized_pnl) {
+                            const pnl = parseFloat(history.data.realized_pnl);
+                            if (pnl >= 0) totalWins++;
+                            totalPnl += pnl;
+                        }
+                    });
+                }
+
+                const winRate = histories.length ? (totalWins / histories.length) * 100 : 0;
+                const avgPnl = histories.length ? totalPnl / histories.length : 0;
+
+                return {
+                    ...hook.toObject(),
+                    tags: hook.tags.split(','),
+                    stats: {
+                        winRate,
+                        avgPnl,
+                    }
+                };
+            } catch (error: any) {
+                console.error("Error getting history info in p2p signals: ", hook._id, error);
+                return { ...hook.toObject(), tags: hook.tags.split(',') };
+            }
+        }))
+
         return res.status(200).json({
             success: true,
-            signals: p2pHooks.map(h => ({...h.toObject(), tags: h.tags.split(',')})),
+            signals: p2pSignals,
             pagination: {
-                currentPage: Number(page) <= Math.ceil(totalItems / 10)  ? Number(page) : 1,
+                currentPage: Number(page) <= Math.ceil(totalItems / 10) ? Number(page) : 1,
                 perPage: 10,
                 totalPages: Math.ceil(totalItems / 10),
                 totalItems,
@@ -455,6 +489,27 @@ router.get('/p2p-signals', adminAuth, async (req, res) => {
         })
     } catch (error) {
         console.error("Error during getting p2p hook: ", error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
+router.put('/p2p-signals/update-status/:id', adminAuth, async (req, res) => {
+    try {
+        const id = req.params.id;
+        const { status } = req.body;
+        const p2pHook = await P2PHook.findByIdAndUpdate(id, { status });
+        if (!p2pHook) {
+            return res.status(400).json({
+                message: 'P2P strategy not found',
+            });
+        }
+
+        return res.status(200).json({
+            signal: { ...p2pHook.toObject(), tags: p2pHook.tags.split(',') },
+            message: 'Update P2P strategy successfully',
+        });
+    } catch (error: any) {
+        console.error("Error during updating p2p hook: ", error);
         return res.status(500).json({ message: 'Server error' });
     }
 });

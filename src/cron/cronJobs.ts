@@ -59,14 +59,14 @@ async function removeOldWebhooks(): Promise<void> {
                     text = `Hi ${user.firstName || 'there'},\n\n` +
                         `${hookCount} of your webhook${hookCount > 1 ? 's were' : ' was'} deleted due to inactivity for over 15 days.\n` +
                         `Please make sure to keep your webhooks up to date in the future.\n\n` +
-                        `- Your App Team`;
+                        `- Signalyze Team`;
                 } else {
                     subject = 'Your Webhooks Will Be Deleted Soon';
                     text = `Hi ${user.firstName || 'there'},\n\n` +
                         `${hookCount} of your webhook${hookCount > 1 ? 's' : ''} have been inactive for 14 days.\n` +
                         `They will be deleted in 1 day if not updated.\n\n` +
                         `Please log in and update them if you want to keep them.\n\n` +
-                        `- Your App Team`;
+                        `- Signalyze Team`;
                 }
 
                 await sendEmail(user.email, subject, text, '');

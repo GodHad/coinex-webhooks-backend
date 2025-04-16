@@ -206,7 +206,7 @@ export const handleTrade = async (
             history.resendStatus = success;
             history.resendResult = data || null;
             history.resendError = error || null;
-            if (user && data.code !== 0) {
+            if (user && data && data.code !== 0) {
                 await sendEmail(
                     user?.email, 
                     'Trade Failed - Retrying',
@@ -242,7 +242,7 @@ export const handleTrade = async (
                 await handleTrade(webhook, newHistory.symbol, newHistory.action, newHistory.amount, newHistory);
             }
 
-            if (success && data.code === 0) {
+            if (success && data && data.code === 0) {
                 if (isClosing) {
                     webhook.positionState = 'neutral';
                     webhook.stopLossPrice = '';
@@ -264,7 +264,7 @@ export const handleTrade = async (
 
     if (result.success) {
         const data = result.data;
-        if (data.code === 0) {
+        if (data && data.code === 0) {
             const position = data.data[0];
             if (position) {
                 webhook.leverage = position.leverage;

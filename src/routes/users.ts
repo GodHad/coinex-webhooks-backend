@@ -5,6 +5,7 @@ import Hook from '../models/Hook';
 import { JWTRequest } from '../types/JWTRequest';
 import AdminData from '../models/AdminData';
 import PositionHistory, { IPositionHistory } from '../models/PositionHistory';
+import { createCoinPaymentsInvoice } from '../utils/coinpaymentsUtils';
 
 const router = express.Router();
 
@@ -104,11 +105,11 @@ router.get('/get-overview', jwtAuth, async (req: JWTRequest, res) => {
         }, 0);
 
         const now = new Date();
-        const startOfWeek = new Date(now); 
+        const startOfWeek = new Date(now);
         startOfWeek.setDate(now.getDate() - now.getDay());
 
         const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-        
+
         const today = new Date().toISOString().split('T')[0];
 
         const todayPnl = positionHistories.filter(h => !h.finished).reduce((sum, history) => {
@@ -146,7 +147,7 @@ router.get('/get-overview', jwtAuth, async (req: JWTRequest, res) => {
                     return sum + (parseFloat(p.data.margin_avbl) - parseFloat(p.data.maintenance_margin_value));
                 }, 0);
         };
-        
+
         const totalRisk = calcRiskFromPositions(positionHistories);
         const standardTotalRisk = calcRiskFromPositions(standardPositionHistories);
         const premiumTotalRisk = calcRiskFromPositions(premiumPositionHistories);
@@ -209,7 +210,7 @@ router.get('/get-pnl-last-30-days', jwtAuth, async (req: JWTRequest, res) => {
         const premiumHooks = uniqueHooks.filter(hook => hook.adminHook);
 
         const initialData = Array.from({ length: 30 }, (_, i) => {
-            const dateKey = new Date(end.getTime() - i * 24 * 60 * 60 * 1000).toISOString().split('T')[0]; 
+            const dateKey = new Date(end.getTime() - i * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
             return { [dateKey]: 0 };
         }).reduce((acc, obj) => ({ ...acc, ...obj }), {});
 
@@ -293,6 +294,20 @@ router.get('/get-page-data', async (req, res) => {
         console.error("Error updating subscribe", error);
         return res.status(500).json({ message: 'Server Error' });
     }
-})
+});
+
+router.post('/request-subscription', jwtAuth, async (req: JWTRequest, res) => {
+    try {
+        const { symbol, amount } = req.body;
+
+        const result = await createCoinPaymentsInvoice(symbol, amount);
+        console.log(result);
+        
+        return res.status(200).json({ success: true, message: 'Cool' });
+    } catch (error) {
+        console.error("Error request subscription: ", error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
 
 export default router;

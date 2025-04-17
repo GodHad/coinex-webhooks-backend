@@ -10,6 +10,7 @@ import historyRoutes from './routes/histories';
 import userRoutes from './routes/users';
 import adminRoutes from './routes/admin';
 import p2pRoutes from './routes/p2p';
+import coinpaymentsRoutes from './routes/coinpayments';
 
 import './cron/cronJobs';
 require("dotenv").config("../.env");
@@ -21,6 +22,7 @@ app.use(cors());
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
 app.use('/api/auth', authRoutes);
 app.use('/api/hooks', hooksRoutes);
 app.use('/api/webhooks', webhooksRoutes);
@@ -28,6 +30,7 @@ app.use('/api/histories', historyRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/p2p', p2pRoutes);
+app.use('/api/coinpayments', coinpaymentsRoutes);
 
 const startServer = async () => {
     try {

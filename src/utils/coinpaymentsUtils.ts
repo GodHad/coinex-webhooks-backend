@@ -37,16 +37,16 @@ const generateReqeust = (method: string, url: string, isoDate: string, payloadMe
     return request;
 }
 
-export const createCoinPaymentsInvoice = async (symbol: string, amount: number) => {
+export const createCoinPaymentsInvoice = async (currency: string, amount: number, paymentCurrency: string, refundEmail: string) => {
     const method = 'POST';
     const url = 'https://api.coinpayments.com/api/v2/merchant/invoices';
     const isoDate = new Date().toISOString().split('.')[0];
-    
+
     const dataPayload = {
-        currency: symbol,
+        currency: 'LTCT',
         items: [
             {
-                name: `Subscription for ${amount > 40 ? 'Premium' : 'Standard'} with ${symbol}`,
+                name: `Subscription for ${amount % 49 === 0 ? 'Premium' : 'Standard'} with ${currency}`,
                 quantity: { value: 1, type: 1 },
                 amount: `${amount}`
             }
@@ -56,6 +56,10 @@ export const createCoinPaymentsInvoice = async (symbol: string, amount: number) 
                 subtotal: `${amount}`
             },
             total: `${amount}`
+        },
+        payment: {
+            paymentCurrency: 'LTCT', 
+            refundEmail
         }
     };
     const payloadMessage = JSON.stringify(dataPayload);
@@ -64,11 +68,34 @@ export const createCoinPaymentsInvoice = async (symbol: string, amount: number) 
 
     try {
         const response = await axios(request);
-        return response.data;
+        return { success: true, data: response.data };
     } catch (error: any) {
         const status = error.response.status || 'Unknown';
         console.error(`Request filaed with status: ${status}`);
         console.error(error.response?.data || error.message);
-        return false;
+        return { success: false, message: error.response?.data || error.message };
+    }
+}
+
+export const getInvoiceByPaymentMethod = async (id: string, symbol: 'BTC' | 'ETH') => {
+    const ids = {
+        BTC: 1,
+        ETH: 2,
+        LTCT: 1002, 
+    };
+    const method = 'GET';
+    const url = `https://api.coinpayments.com/api/v1/invoices/${id}/payment-currencies/${ids.LTCT}`;
+    const isoDate = new Date().toISOString().split('.')[0];
+
+    const request = generateReqeust(method, url, isoDate);
+
+    try {
+        const response = await axios(request);
+        return { success: true, data: response.data };
+    } catch (error: any) {
+        const status = error.response?.status || 'Unknown';
+        console.error(`Request failed with status: ${status}`);
+        console.error(error.response?.data || error.message);
+        return { success: false, message: error.response?.data || error.message };
     }
 }

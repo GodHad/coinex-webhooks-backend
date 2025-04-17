@@ -19,6 +19,10 @@ export interface IUser extends Document {
         inPosition: number | null;
     } | null;
     activeAccount: number | null;
+    requestedPlan: string | null;
+    requestedAmount: number | null;
+    requestedPaymentMethod: string | null;
+    invoiceID: string | null;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -44,6 +48,10 @@ const userSchema = new Schema<IUser>(
             },
             default: null,
         },
+        requestedPlan: { type: String, default: null },
+        requestedAmount: { type: Number, default: null },
+        requestedPaymentMethod: { type: String, default: null },
+        invoiceID: { type: String, default: null },
     },
     { timestamps: true }
 );

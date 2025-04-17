@@ -5,7 +5,7 @@ import Hook from '../models/Hook';
 import { JWTRequest } from '../types/JWTRequest';
 import AdminData from '../models/AdminData';
 import PositionHistory, { IPositionHistory } from '../models/PositionHistory';
-import { createCoinPaymentsInvoice } from '../utils/coinpaymentsUtils';
+import { createCoinPaymentsInvoice, getInvoiceByPaymentMethod } from '../utils/coinpaymentsUtils';
 
 const router = express.Router();
 
@@ -272,7 +272,6 @@ router.get('/social-links', async (req, res) => {
 router.get('/get-sidebar-title', async (req, res) => {
     try {
         const adminData = await AdminData.findOne({}, 'sidebarTitle');
-        console.log(adminData)
         return res.status(200).json({
             sidebarTitle: adminData ? adminData.sidebarTitle : 'Webhook Manager',
             message: 'Get sidebar title successful',
@@ -298,12 +297,38 @@ router.get('/get-page-data', async (req, res) => {
 
 router.post('/request-subscription', jwtAuth, async (req: JWTRequest, res) => {
     try {
-        const { symbol, amount } = req.body;
+        const { plan, symbol, amount } = req.body;
 
-        const result = await createCoinPaymentsInvoice(symbol, amount);
-        console.log(result);
-        
-        return res.status(200).json({ success: true, message: 'Cool' });
+        if (plan === 'Premium') {
+            if (Number(amount) !== 49 && Number(amount) !== 490) return res.status(405).json({ message: 'Invalid arguments' });
+        } else if (plan === 'Standard') {
+            if (Number(amount) !== 19 && Number(amount) !== 190) return res.status(405).json({ message: 'Invalid arguments' });
+        } else if (symbol !== 'BTC' && symbol !== 'ETH') {
+            return res.status(405).json({ message: 'Invalid arguments' });
+        }
+
+        const userId = req.user?.userId;
+        const user = await User.findById(userId);
+
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        await user.updateOne({ requestedPlan: plan, requestedAmount: amount, requestedPaymentMethod: symbol });
+
+        const result = await createCoinPaymentsInvoice('USD', amount, symbol, user.email);
+        if (!result.success) return res.status(400).json({ message: result.message });
+
+        await user.updateOne({ invoiceID: result.data.invoices[0].id });
+
+        const result1 = await getInvoiceByPaymentMethod(result.data.invoices[0].id, symbol);
+        if (!result1.success) return res.status(400).json({ message: result.message });
+        return res.status(200).json({
+            success: true,
+            logo: result1.data.currency.logo.imageUrl,
+            rate: result1.data.amount.rate,
+            display: result1.data.amount.displayValue,
+            address: result1.data.addresses.address,
+            expires: result1.data.expires,
+        });
     } catch (error) {
         console.error("Error request subscription: ", error);
         return res.status(500).json({ message: 'Server error' });

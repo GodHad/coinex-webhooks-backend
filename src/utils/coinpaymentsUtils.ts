@@ -43,7 +43,7 @@ export const createCoinPaymentsInvoice = async (currency: string, amount: number
     const isoDate = new Date().toISOString().split('.')[0];
 
     const dataPayload = {
-        currency: 'LTCT',
+        currency,
         items: [
             {
                 name: `Subscription for ${amount % 49 === 0 ? 'Premium' : 'Standard'} with ${currency}`,

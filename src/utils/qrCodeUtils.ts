@@ -71,10 +71,14 @@ const generateQRCode = async ({
         : buffer;
 
     const targetDir = path.resolve(__dirname, '../../../coinex-new-frontend/public/uploads');
-    if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+    try {
+        await fs.promises.access(targetDir);
+    } catch {
+        await fs.promises.mkdir(targetDir, { recursive: true });
+    }
 
     const filePath = path.join(targetDir, `${filename}.${fileExtension}`);
-    fs.writeFileSync(filePath, Buffer.isBuffer(arrayBuffer) ? arrayBuffer : Buffer.from(arrayBuffer));
+    await fs.promises.writeFile(filePath, Buffer.isBuffer(arrayBuffer) ? arrayBuffer : Buffer.from(arrayBuffer));
 
     return `/uploads/${filename}.${fileExtension}`;
 };

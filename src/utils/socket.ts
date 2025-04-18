@@ -18,6 +18,7 @@ const websocketServer = (server: HttpServer) => {
         console.log('Scoket connected: ', socket.id);
 
         socket.on('subscribeToInvoice', async (invoiceID) => {
+            console.log(invoiceID)
             socket.join(`invoice-${invoiceID}`);
         });
 

@@ -341,7 +341,7 @@ router.post('/request-subscription', jwtAuth, async (req: JWTRequest, res) => {
 
         return res.status(200).json({
             success: true,
-            invoiceID: user.invoiceID,
+            invoiceID: result.data.invoices[0].id,
             url,
             rate: result1.data.amount.rate,
             display: result1.data.amount.displayValue,

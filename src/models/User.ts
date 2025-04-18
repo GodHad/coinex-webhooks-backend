@@ -23,6 +23,7 @@ export interface IUser extends Document {
     requestedAmount: number | null;
     requestedPaymentMethod: string | null;
     invoiceID: string | null;
+    invoiceStatus: string | null;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -52,6 +53,7 @@ const userSchema = new Schema<IUser>(
         requestedAmount: { type: Number, default: null },
         requestedPaymentMethod: { type: String, default: null },
         invoiceID: { type: String, default: null },
+        invoiceStatus: { type: String, default: null },
     },
     { timestamps: true }
 );

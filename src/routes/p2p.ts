@@ -204,7 +204,7 @@ router.put('/:id', jwtAuth, siteMaintenanceMiddleware, upload.single('imageUrl')
             imagePath = `/uploads/${req.file?.filename}`;
 
             if (p2pHook.imageUrl?.startsWith('/uploads/')) {
-                const oldPath = path.join(__dirname, '..', p2pHook.imageUrl);
+                const oldPath = path.join(__dirname, '../../../coinex-new-frontend/public', p2pHook.imageUrl);
                 fs.existsSync(oldPath) && fs.unlinkSync(oldPath);
             }
         } else if (isUrl) {

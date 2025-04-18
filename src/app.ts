@@ -13,6 +13,7 @@ import p2pRoutes from './routes/p2p';
 import coinpaymentsRoutes from './routes/coinpayments';
 
 import './cron/cronJobs';
+import websocketServer, { setSocketIOInstance } from "./utils/socket";
 require("dotenv").config("../.env");
 
 const app = express();
@@ -36,6 +37,9 @@ const startServer = async () => {
     try {
         await init()
         const server = createServer(app);
+        const { io } = websocketServer(server);
+        setSocketIOInstance(io);
+
         server.listen(PORT, () => {
             console.log('App is running at http://localhost:%d in %s mode', PORT, app.get('env'));
         })

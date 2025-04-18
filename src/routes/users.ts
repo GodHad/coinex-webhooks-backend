@@ -6,6 +6,9 @@ import { JWTRequest } from '../types/JWTRequest';
 import AdminData from '../models/AdminData';
 import PositionHistory, { IPositionHistory } from '../models/PositionHistory';
 import { createCoinPaymentsInvoice, getInvoiceByPaymentMethod } from '../utils/coinpaymentsUtils';
+import generateQRCode from '../utils/qrCodeUtils';
+import path from 'node:path';
+import fs from 'node:fs';
 
 const router = express.Router();
 
@@ -314,6 +317,12 @@ router.post('/request-subscription', jwtAuth, async (req: JWTRequest, res) => {
 
         await user.updateOne({ requestedPlan: plan, requestedAmount: amount, requestedPaymentMethod: symbol });
 
+        if (user.invoiceID) {
+            const imagePath = `/uploads/${user.invoiceID}.png`;
+            const oldPath = path.join(__dirname, '../../../coinex-new-frontend/public', imagePath);
+            fs.existsSync(oldPath) && fs.unlinkSync(oldPath);
+        }
+
         const result = await createCoinPaymentsInvoice('USD', amount, symbol, user.email);
         if (!result.success) return res.status(400).json({ message: result.message });
 
@@ -321,9 +330,19 @@ router.post('/request-subscription', jwtAuth, async (req: JWTRequest, res) => {
 
         const result1 = await getInvoiceByPaymentMethod(result.data.invoices[0].id, symbol);
         if (!result1.success) return res.status(400).json({ message: result.message });
+
+        const url = await generateQRCode({
+            filename: result.data.invoices[0].id ?? 'test', 
+            address: result1.data.addresses.address,
+            currency: symbol,
+            amount: Number(result1.data.amount.displayValue),
+            imageUrl: result1.data.currency.logo.imageUrl,
+        });
+
         return res.status(200).json({
             success: true,
-            logo: result1.data.currency.logo.imageUrl,
+            invoiceID: user.invoiceID,
+            url,
             rate: result1.data.amount.rate,
             display: result1.data.amount.displayValue,
             address: result1.data.addresses.address,

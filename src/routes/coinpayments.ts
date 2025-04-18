@@ -16,6 +16,8 @@ router.post('/callback', async (req, res) => {
             status: invoiceStatus.type,
         });
 
+        console.log(invoiceStatus);
+
         if (user.invoiceStatus === 'InvoicePaid' && invoiceStatus.type === 'InvoiceCompleted') {
             const currentDate = new Date();
             if (user.requestedPlan === 'Standard') {

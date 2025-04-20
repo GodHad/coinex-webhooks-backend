@@ -3,6 +3,7 @@ import nodeCanvas from 'canvas';
 import { JSDOM } from 'jsdom';
 import fs from 'node:fs';
 import path from 'node:path';
+import axios from 'axios';
 
 type QRType = 'svg' | 'canvas';
 
@@ -13,6 +14,11 @@ interface GenerateQRCodeOptions {
     amount: number;
     imageUrl?: string;
     type?: QRType;
+}
+
+const downloadImage = async (url: string) => {
+    const response = await axios.get(url, { responseType: 'arraybuffer' });
+    await fs.promises.writeFile('../uploads/icon.png', Buffer.from(response.data));
 }
 
 const generateQRData = (currency: string, address: string, amount: number) => {
@@ -37,6 +43,15 @@ const generateQRCode = async ({
     type = 'canvas'
 }: GenerateQRCodeOptions): Promise<string> => {
     const data = generateQRData(currency, address, amount);
+
+    const targetDirr = path.join('../uploads');
+    try {
+        await fs.promises.access(targetDirr);
+    } catch {
+        await fs.promises.mkdir(targetDirr, {recursive: true});
+    }
+
+    await downloadImage(imageUrl || '');
 
     const options = {
         width: 300,

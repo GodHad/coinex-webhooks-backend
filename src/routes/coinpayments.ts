@@ -22,7 +22,7 @@ router.post('/callback', async (req, res) => {
             const currentDate = new Date();
             if (user.requestedPlan === 'Standard') {
                 user.subscribed = 1;
-                currentDate.setFullYear(currentDate.getFullYear() + 1);
+                currentDate.setMonth(currentDate.getMonth() + 1);
                 user.subscribeEndDate = currentDate;
             } else if (user.requestedPlan === 'Premium') {
                 user.subscribed = 2;

@@ -67,8 +67,8 @@ export const createCoinPaymentsInvoice = async (currency: string, amount: number
     const request = generateReqeust(method, url, isoDate, payloadMessage)
 
     try {
-        console.log(request)
         const response = await axios(request);
+        console.log(response.data.invoices[0].payment.paymentCurrencies[0].currency)
         return { success: true, data: response.data };
     } catch (error: any) {
         const status = error.response.status || 'Unknown';

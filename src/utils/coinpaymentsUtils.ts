@@ -58,7 +58,7 @@ export const createCoinPaymentsInvoice = async (currency: string, amount: number
             total: `${amount}`
         },
         payment: {
-            paymentCurrency: 'LTCT', 
+            paymentCurrency, 
             refundEmail
         }
     };
@@ -84,7 +84,7 @@ export const getInvoiceByPaymentMethod = async (id: string, symbol: 'BTC' | 'ETH
         LTCT: 1002, 
     };
     const method = 'GET';
-    const url = `https://api.coinpayments.com/api/v1/invoices/${id}/payment-currencies/${ids.LTCT}`;
+    const url = `https://api.coinpayments.com/api/v1/invoices/${id}/payment-currencies/${ids[symbol]}`;
     const isoDate = new Date().toISOString().split('.')[0];
 
     const request = generateReqeust(method, url, isoDate);

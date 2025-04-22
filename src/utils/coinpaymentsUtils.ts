@@ -67,12 +67,13 @@ export const createCoinPaymentsInvoice = async (currency: string, amount: number
     const request = generateReqeust(method, url, isoDate, payloadMessage)
 
     try {
+        console.log(request)
         const response = await axios(request);
         return { success: true, data: response.data };
     } catch (error: any) {
         const status = error.response.status || 'Unknown';
         console.error(`Request filaed with status: ${status}`);
-        console.error(error.response?.data || error.message);
+        console.error(error);
         return { success: false, message: error.response?.data || error.message };
     }
 }
@@ -80,7 +81,7 @@ export const createCoinPaymentsInvoice = async (currency: string, amount: number
 export const getInvoiceByPaymentMethod = async (id: string, symbol: 'BTC' | 'ETH') => {
     const ids = {
         BTC: 1,
-        ETH: 3,
+        ETH: 4,
         SOL: 12,
         LTCT: 1002, 
     };

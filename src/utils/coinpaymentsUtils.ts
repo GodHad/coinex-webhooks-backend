@@ -85,11 +85,7 @@ export const getInvoiceByPaymentMethod = async (id: string, symbol: 'BTC' | 'ETH
         LTCT: 1002, 
     };
 
-    const currencyId = ids[symbol];
-    if (!currencyId) {
-        return { success: false, message: 'Unsupported payment method' };
-    }
-
+    console.log(symbol, id, ids[symbol])
     const method = 'GET';
     const url = `https://api.coinpayments.com/api/v1/invoices/${id}/payment-currencies/${ids[symbol]}`;
     const isoDate = new Date().toISOString().split('.')[0];

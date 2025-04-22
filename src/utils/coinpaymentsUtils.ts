@@ -79,10 +79,10 @@ export const createCoinPaymentsInvoice = async (currency: string, amount: number
 
 export const getInvoiceByPaymentMethod = async (id: string, symbol: 'BTC' | 'ETH' | 'SOL') => {
     const ids = {
-        BTC: 1,
-        ETH: 4,
-        SOL: 55,
-        LTCT: 1002, 
+        'BTC': 1,
+        'ETH': 4,
+        'SOL': 55,
+        'LTCT': 1002, 
     };
 
     console.log(symbol, id, ids[symbol])

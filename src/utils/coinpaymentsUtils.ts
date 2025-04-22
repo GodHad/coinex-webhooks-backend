@@ -96,9 +96,9 @@ export const getInvoiceByPaymentMethod = async (id: string, symbol: 'BTC' | 'ETH
         const response = await axios(request);
         return { success: true, data: response.data };
     } catch (error: any) {
-        const status = error.response?.status || 'Unknown';
+        const status = error?.response?.status || 'Unknown';
         console.error(`Request failed with status: ${status}`);
-        console.error(error.response?.data || error.message);
-        return { success: false, message: error.response?.data || error.message };
+        console.error(error?.response?.data || error?.message || '');
+        return { success: false, message: error?.response?.data || error?.message || '' };
     }
 }

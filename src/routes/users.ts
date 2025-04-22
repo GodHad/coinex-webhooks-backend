@@ -306,7 +306,7 @@ router.post('/request-subscription', jwtAuth, async (req: JWTRequest, res) => {
             if (Number(amount) !== 49 && Number(amount) !== 490) return res.status(405).json({ message: 'Invalid arguments' });
         } else if (plan === 'Standard') {
             if (Number(amount) !== 19 && Number(amount) !== 190) return res.status(405).json({ message: 'Invalid arguments' });
-        } else if (symbol !== 'BTC' && symbol !== 'ETH') {
+        } else if (symbol !== 'BTC' && symbol !== 'ETH' && symbol !== 'SOL') {
             return res.status(405).json({ message: 'Invalid arguments' });
         }
 

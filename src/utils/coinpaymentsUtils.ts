@@ -68,7 +68,6 @@ export const createCoinPaymentsInvoice = async (currency: string, amount: number
 
     try {
         const response = await axios(request);
-        console.log(response.data.invoices[0].payment.paymentCurrencies[0].currency)
         return { success: true, data: response.data };
     } catch (error: any) {
         const status = error.response.status || 'Unknown';
@@ -82,7 +81,7 @@ export const getInvoiceByPaymentMethod = async (id: string, symbol: 'BTC' | 'ETH
     const ids = {
         BTC: 1,
         ETH: 4,
-        SOL: 12,
+        SOL: 55,
         LTCT: 1002, 
     };
     const method = 'GET';

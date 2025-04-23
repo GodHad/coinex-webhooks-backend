@@ -9,6 +9,7 @@ import { createCoinPaymentsInvoice, getInvoiceByPaymentMethod } from '../utils/c
 import generateQRCode from '../utils/qrCodeUtils';
 import path from 'node:path';
 import fs from 'node:fs';
+import bcrypt from 'bcryptjs';
 
 const router = express.Router();
 
@@ -46,6 +47,27 @@ router.put('/update-subscribe/:id', adminAuth, async (req, res) => {
     } catch (error) {
         console.error("Error updating subscribe", error);
         return res.status(500).json({ message: 'Server Error' });
+    }
+});
+
+router.put('/reset-password/:id', adminAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const user = await User.findById(id);
+        if (!user) {
+            return res.status(400).json({ message: 'User not found' });
+        }
+
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash("123456789", salt);
+
+        user.password = hashedPassword;
+        await user.save();
+
+        return res.status(200).json({ message: "Reset password successfully" });
+    } catch (error) {
+        console.error("Error while resetting password", error);
+        return res.status(500).json({ message: 'Server error' });
     }
 })
 
@@ -332,7 +354,7 @@ router.post('/request-subscription', jwtAuth, async (req: JWTRequest, res) => {
         if (!result1.success) return res.status(400).json({ message: result.message });
 
         const url = await generateQRCode({
-            filename: result.data.invoices[0].id ?? 'test', 
+            filename: result.data.invoices[0].id ?? 'test',
             address: result1.data.addresses.address,
             currency: symbol,
             amount: Number(result1.data.amount.displayValue),

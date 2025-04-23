@@ -16,11 +16,20 @@ interface GenerateQRCodeOptions {
     type?: QRType;
 }
 
-const downloadImage = async (url: string) => {
-    const response = await axios.get(url, { responseType: 'arraybuffer' });
-    await fs.promises.writeFile('../uploads/icon.png', Buffer.from(response.data));
-}
+const downloadImage = async (url: string, currency: string) => {
+    const filePath = path.join(__dirname, '../uploads', `${currency}.svg`);
 
+    try {
+        await fs.promises.access(filePath, fs.constants.F_OK);
+        console.log(`${currency}.svg already exists. Skipping download.`);
+    } catch (err) {
+        const response = await axios.get(url, { responseType: 'arraybuffer' });
+        await fs.promises.writeFile(filePath, Buffer.from(response.data));
+        console.log(`${currency}.svg downloaded and saved.`);
+    }
+
+    return path.join(__dirname, '../uploads', currency + '.svg');
+};
 const generateQRData = (currency: string, address: string, amount: number) => {
     switch (currency) {
         case 'BTC':
@@ -44,21 +53,21 @@ const generateQRCode = async ({
 }: GenerateQRCodeOptions): Promise<string> => {
     const data = generateQRData(currency, address, amount);
 
-    const targetDirr = path.join('../uploads');
+    const targetDirr = path.join(__dirname, '../uploads');
     try {
         await fs.promises.access(targetDirr);
     } catch {
         await fs.promises.mkdir(targetDirr, {recursive: true});
     }
 
-    await downloadImage(imageUrl || '');
+    const downloadImageUrl = await downloadImage(imageUrl || '', currency);
 
     const options = {
         width: 300,
         height: 300,
         data,
         type: type as DrawType,
-        image: imageUrl,
+        image: downloadImageUrl,
         jsdom: JSDOM,
         ...(type === 'canvas' ? { nodeCanvas } : {}),
         dotsOptions: {
@@ -71,7 +80,7 @@ const generateQRCode = async ({
         imageOptions: {
             crossOrigin: "anonymous",
             margin: 20,
-            saveAsBlob: true,
+            imageSize: 0.8,
         }
     };
 

@@ -32,13 +32,13 @@ router.put('/update-subscribe/:id', adminAuth, async (req, res) => {
 
         const subscribed = user.subscribed;
         if (subscribed === 0 || subscribed === 3) {
-            user.subscribed = 1;
+            user.subscribed = 2;
             const currentDate = new Date();
             currentDate.setFullYear(currentDate.getFullYear() + 1);
 
             user.subscribeEndDate = currentDate;
         } else {
-            user.subscribed = 3 - subscribed;
+            user.subscribed = 3;
         }
 
         await user.save();

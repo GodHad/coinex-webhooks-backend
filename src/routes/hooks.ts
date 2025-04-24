@@ -43,7 +43,7 @@ router.post('/create', jwtAuth, siteMaintenanceMiddleware, async (req: JWTReques
         }
 
         const isSubscribed =
-            user.subscribed === 1 &&
+            user.subscribed === 2 &&
             user.subscribeEndDate &&
             new Date(user.subscribeEndDate).getTime() > Date.now();
 
@@ -111,7 +111,7 @@ router.put('/update/:id', jwtAuth, siteMaintenanceMiddleware, async (req: JWTReq
             return res.status(400).json({ message: 'User not found' });
         }
 
-        const isSubscribed = user.subscribed === 1 && user.subscribeEndDate && new Date(user.subscribeEndDate).getTime() > Date.now();
+        const isSubscribed = user.subscribed === 2 && user.subscribeEndDate && new Date(user.subscribeEndDate).getTime() > Date.now();
 
         if (isUsingAdminHook && !isSubscribed) {
             return res.status(403).json({ message: 'You are not allowed this action' });

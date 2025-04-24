@@ -12,6 +12,8 @@ require('dotenv').config();
 
 const router = express.Router();
 
+const frontendUrl = process.env.FRONTEND_URL;
+
 router.post('/register', siteMaintenanceMiddleware, async (req: Request, res: Response) => {
     try {
         const { firstname, lastname, email, password, confirmPassword } = req.body;
@@ -239,6 +241,51 @@ router.post("/verify-otp", async (req, res) => {
         return res.status(200).json({ message: "OTP verified. Login successful.", token });
     } catch (error) {
         return res.status(404).json({ message: 'Server error' });
+    }
+});
+
+router.post('/forgot-password', async (req, res) => {
+    try {
+        const { email } = req.body;
+        const user = await User.findOne({ email });
+
+        if (!user) return res.status(404).send('User not found');
+
+        const resetToken = user.generatePasswordReset();
+        await user.save();
+
+        const resetLink = `${frontendUrl}reset-password?token=${resetToken}`;
+        await sendEmail(user.email, 'Reset your password', `Click here to reset password: ${resetLink}`, '');
+
+        return res.status(200).json({ message: 'Email sent your address' });
+    } catch (error) {
+        console.error('Error while handling forgot password', error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
+router.post('/reset-password', async (req, res) => {
+    try {
+        const { token, password } = req.body;
+        const user = await User.findOne({
+            resetPasswordToken: token,
+            resetPasswordExpires: { $gt: Date.now() },
+        });
+
+        if (!user) return res.status(400).json({ message: 'Invalid or expired token' });
+
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+
+        user.password = hashedPassword;
+        user.resetPasswordToken = null;
+        user.resetPasswordExpires = null;
+        await user.save();
+
+        return res.status(200).json({ message: 'Password reset successful' });
+    } catch (error) {
+        console.error('Error while handling reset password', error);
+        return res.status(500).json({ message: 'Server error' });
     }
 });
 

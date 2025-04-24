@@ -44,7 +44,7 @@ router.post('/:webhookUrl', webhooksMaintenanceMiddleware, async (req, res) => {
                     continue;
                 }
 
-                const isSubscribed = webhook.creator.subscribed === 1 && webhook.creator.subscribeEndDate && new Date(webhook.creator.subscribeEndDate).getTime() > Date.now();
+                const isSubscribed = webhook.creator.subscribed === 2 && webhook.creator.subscribeEndDate && new Date(webhook.creator.subscribeEndDate).getTime() > Date.now();
 
                 if (!isSubscribed) {
                     results.push({

@@ -16,7 +16,7 @@ router.get('/', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRequest, res)
 
         if (!user) return res.status(404).json({ message: 'User not found' });
         const isSubscribed =
-            user.subscribed === 1 &&
+            user.subscribed === 2 &&
             user.subscribeEndDate &&
             new Date(user.subscribeEndDate).getTime() > Date.now();
 

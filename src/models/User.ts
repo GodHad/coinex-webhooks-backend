@@ -1,5 +1,6 @@
 // models/User.js
 import mongoose, { Document, Schema } from 'mongoose';
+import cryto from 'node:crypto';
 
 export interface IUser extends Document {
     firstName: string;
@@ -24,6 +25,9 @@ export interface IUser extends Document {
     requestedPaymentMethod: string | null;
     invoiceID: string | null;
     invoiceStatus: string | null;
+    resetPasswordToken: string | null;
+    resetPasswordExpires: Date | null;
+    generatePasswordReset: () => string;
     createdAt: Date;
     updatedAt: Date;
 }
@@ -54,9 +58,18 @@ const userSchema = new Schema<IUser>(
         requestedPaymentMethod: { type: String, default: null },
         invoiceID: { type: String, default: null },
         invoiceStatus: { type: String, default: null },
+        resetPasswordToken: { type: String, default: null },
+        resetPasswordExpires: { type: Date, default: null },
     },
     { timestamps: true }
 );
+
+userSchema.methods.generatePasswordReset = function () {
+    const token = crypto.randomUUID();
+    this.resetPasswordToken = token;
+    this.resetPasswordExpires = Date.now() + 3600000;
+    return token;
+}
 
 const User = mongoose.model<IUser>('User', userSchema);
 

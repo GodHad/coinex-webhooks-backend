@@ -146,16 +146,16 @@ router.get('/overview', adminAuth, async (req: JWTRequest, res) => {
         });
 
         const totalPremiumUsers = await User.countDocuments({
-            subscribed: 1,
+            subscribed: 2,
             subscribeEndDate: { $gt: now },
         });
         const totalPremiumUsersCurrentMonth = await User.countDocuments({
-            subscribed: 1,
+            subscribed: 2,
             subscribeEndDate: { $gt: now },
             createdAt: { $gte: currentMonthStart },
         });
         const totalPremiumUsersPreviousMonth = await User.countDocuments({
-            subscribed: 1,
+            subscribed: 2,
             subscribeEndDate: { $gt: now },
             createdAt: { $gte: previousMonthStart, $lt: previousMonthEnd },
         });

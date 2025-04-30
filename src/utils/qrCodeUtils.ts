@@ -17,19 +17,22 @@ interface GenerateQRCodeOptions {
 }
 
 const downloadImage = async (url: string, currency: string) => {
-    const filePath = path.join(__dirname, '../uploads', `${currency}.svg`);
+    const ext = 'svg';
+    const filePath = path.join(__dirname, '../uploads', `${currency}.${ext}`);
 
     try {
         await fs.promises.access(filePath, fs.constants.F_OK);
-        console.log(`${currency}.svg already exists. Skipping download.`);
+        console.log(`${currency}.${ext} already exists. Skipping download.`);
     } catch (err) {
         const response = await axios.get(url, { responseType: 'arraybuffer' });
         await fs.promises.writeFile(filePath, Buffer.from(response.data));
-        console.log(`${currency}.svg downloaded and saved.`);
+        console.log(`${currency}.${ext} downloaded and saved.`);
     }
 
-    return path.join(__dirname, '../uploads', currency + '.svg');
+    const fileData = await fs.promises.readFile(filePath);
+    return `data:image/${ext}+xml;base64,${fileData.toString('base64')}`;
 };
+
 const generateQRData = (currency: string, address: string, amount: number) => {
     switch (currency) {
         case 'BTC':

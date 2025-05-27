@@ -322,7 +322,12 @@ router.get('/get-page-data', async (req, res) => {
 
 router.post('/request-subscription', jwtAuth, async (req: JWTRequest, res) => {
     try {
-        const { plan, symbol, amount } = req.body;
+        const { plan, symbol, amount, p2pSignalId } = req.body;
+
+        const userId = req.user?.userId;
+        const user = await User.findById(userId);
+
+        if (!user) return res.status(404).json({ message: 'User not found' });
 
         if (plan === 'Premium') {
             if (Number(amount) !== 49 && Number(amount) !== 490) return res.status(405).json({ message: 'Invalid arguments' });
@@ -332,12 +337,7 @@ router.post('/request-subscription', jwtAuth, async (req: JWTRequest, res) => {
             return res.status(405).json({ message: 'Invalid arguments' });
         }
 
-        const userId = req.user?.userId;
-        const user = await User.findById(userId);
-
-        if (!user) return res.status(404).json({ message: 'User not found' });
-
-        await user.updateOne({ requestedPlan: plan, requestedAmount: amount, requestedPaymentMethod: symbol });
+        await user.updateOne({ requestedPlan: plan === 'p2p' ? p2pSignalId : plan, requestedAmount: amount, requestedPaymentMethod: symbol });
 
         if (user.invoiceID) {
             const imagePath = `/uploads/${user.invoiceID}.png`;

@@ -1,6 +1,7 @@
 import express from 'express';
 import User from '../models/User';
 import { getSocketIOInstance } from '../utils/socket';
+import Hook from '../models/Hook';
 
 const router = express.Router();
 
@@ -26,6 +27,12 @@ router.post('/callback', async (req, res) => {
                 user.subscribed = 2;
                 currentDate.setFullYear(currentDate.getFullYear() + 1);
                 user.subscribeEndDate = currentDate;
+            } else {
+                const newHook = new Hook({
+                    creator: user._id,
+                    adminHook: user.requestedPlan, 
+                    
+                });
             }
             user.requestedAmount = null;
             user.requestedPaymentMethod = null;

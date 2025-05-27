@@ -58,6 +58,15 @@ const hookSchema = new Schema<IHook>(
     { timestamps: true }
 );
 
+hookSchema.methods.getCreator = function () {
+    return this.model('User').findById(this.creator);
+}
+
+hookSchema.methods.getAdminHook = function () {
+    if (!this.adminHook) return null;
+    return this.model('AdminHook').findById(this.adminHook);
+}
+
 const Hook = mongoose.model<IHook>('Hook', hookSchema);
 
 export default Hook;

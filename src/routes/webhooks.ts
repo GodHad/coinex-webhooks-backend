@@ -1,7 +1,6 @@
 import express from 'express';
 import Hook from '../models/Hook';
 import History from '../models/History';
-import crypto from 'crypto';
 import axios from 'axios';
 import User, { IUser } from '../models/User';
 import AdminHook from '../models/AdminHook';

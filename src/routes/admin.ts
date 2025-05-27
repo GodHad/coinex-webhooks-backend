@@ -11,6 +11,8 @@ import bcrypt from 'bcryptjs';
 import ExchangePartner from '../models/ExchangePartner';
 import P2PHook from '../models/P2PHook';
 import PositionHistory from '../models/PositionHistory';
+import PremiumHook from '../models/PremiumHook';
+import mongoose from 'mongoose';
 
 const router = express.Router();
 
@@ -48,21 +50,12 @@ router.get('/all-hooks', adminAuth, async (req, res) => {
 })
 
 router.post('/hooks/create', adminAuth, async (req: JWTRequest, res) => {
-    const { name, pair, timeframe, riskLevel, imageUrl, recommendedLeverage, description } = req.body;
+    const { name, timeframe, riskLevel, imageUrl, recommendedLeverage, description } = req.body;
     try {
         const userId = req.user?.userId;
 
-        const isValidPair = (value: string) => /^[A-Z]{2,10}\/[A-Z]{2,10}$/.test(value);
-        if (!pair || !isValidPair(pair)) {
-            return res.status(400).json({ message: 'Invalid pair format. Use e.g. BTC/USD' });
-        }
-
-        const url = uuidv4();
-
-        const newHook = new AdminHook({
+        const newHook = new PremiumHook({
             name,
-            pair,
-            url,
             timeframe,
             riskLevel,
             creator: userId,
@@ -80,7 +73,7 @@ router.post('/hooks/create', adminAuth, async (req: JWTRequest, res) => {
         );
         return res.status(200).json({
             message: 'Create new hook successful',
-            hook: { ...newHook.toObject(), signals: 0 }
+            hook: { ...newHook.toObject() }
         })
     } catch (error) {
         console.error("Error during creating hook:", error);
@@ -89,14 +82,14 @@ router.post('/hooks/create', adminAuth, async (req: JWTRequest, res) => {
 });
 
 router.put('/hooks/update/:id', adminAuth, async (req: JWTRequest, res) => {
-    const { name, pair, timeframe, riskLevel, enabled, imageUrl, recommendedLeverage, description } = req.body;
+    const { name, timeframe, riskLevel, enabled, imageUrl, recommendedLeverage, description } = req.body;
     const id = req.params.id;
     const userId = req.user?.userId
 
     try {
         const dependingHooks = await Hook.find({ adminHook: id });
 
-        const updatedHook = await AdminHook.findByIdAndUpdate(id, { name, pair, timeframe, riskLevel, enabled, imageUrl, recommendedLeverage, description }, { new: true });
+        const updatedHook = await PremiumHook.findByIdAndUpdate(id, { name, timeframe, riskLevel, enabled, imageUrl, recommendedLeverage, description }, { new: true });
         await User.findByIdAndUpdate(
             userId,
             { $set: { updatedAt: new Date() } },
@@ -117,7 +110,7 @@ router.delete('/hooks/:id', adminAuth, async (req: JWTRequest, res) => {
     const userId = req.user?.userId
 
     try {
-        await AdminHook.findByIdAndDelete(id);
+        await PremiumHook.findByIdAndDelete(id);
         await User.findByIdAndUpdate(
             userId,
             { $set: { updatedAt: new Date() } },
@@ -128,7 +121,67 @@ router.delete('/hooks/:id', adminAuth, async (req: JWTRequest, res) => {
         console.error("Error during deleting hook: ", error);
         return res.status(500).json({ message: 'Server error' });
     }
-})
+});
+
+router.post('/create-pair', adminAuth, async (req: JWTRequest, res) => {
+    const { premiumHookId, pair } = req.body;
+    try {
+        const newAdminHook = new AdminHook({
+            pair,
+            url: uuidv4(),
+        });
+        await newAdminHook.save();
+
+        const premiumHook = await PremiumHook.findById(premiumHookId);
+        if (!premiumHook) {
+            return res.status(404).json({ message: 'PremiumHook not found' });
+        }
+
+        premiumHook.pairs.push(newAdminHook._id as mongoose.Types.ObjectId);
+
+        await premiumHook.save();
+
+        return res.status(200).json({
+            message: 'Create new pair successful',
+            pair: newAdminHook,
+        });
+    } catch (error) {
+        console.error("Error during creating piar:", error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
+router.put('/update-pair/:pairId', adminAuth, async (req: JWTRequest, res) => {
+    const { pairId } = req.params;
+    const { pair } = req.body;
+    try {
+        const adminHook = await AdminHook.findByIdAndUpdate(
+            pairId,
+            { $set: { pair } },
+            { new: true }
+        );
+
+        return res.status(200).json({
+            message: 'Update pair successful',
+            pair: adminHook
+        })
+    } catch (error) {
+        console.error("Error during updating pair:", error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
+
+router.delete('/delete-pair/:pairId', adminAuth, async (req: JWTRequest, res) => {
+    const { pairId } = req.params;
+    try {
+        await AdminHook.findByIdAndDelete(pairId);
+        // await Hook.deleteMany({ adminHook: pairId });
+        return res.status(200).json({ message: 'Delete successful' });
+    } catch (error) {
+        console.error("Error during deleting pair", error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+});
 
 router.get('/overview', adminAuth, async (req: JWTRequest, res) => {
     try {

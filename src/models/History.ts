@@ -20,7 +20,7 @@ export interface IHistory extends Document {
   createdAt: Date;
 }
 
-const HistorySchma = new mongoose.Schema<IHistory>({
+const historySchema = new mongoose.Schema<IHistory>({
   hook: { type: mongoose.Schema.Types.ObjectId, ref: 'Hook', required: true },
   symbol: { type: String, required: true },
   action: { type: String, required: true },
@@ -35,6 +35,10 @@ const HistorySchma = new mongoose.Schema<IHistory>({
   resendError: { type: mongoose.Schema.Types.Mixed },
 }, { timestamps: true });
 
-const History = mongoose.model('History', HistorySchma);
+historySchema.methods.getHook = function () {
+  return this.model('Hook').findById(this.hook);
+}
+
+const History = mongoose.model('History', historySchema);
 
 export default History;

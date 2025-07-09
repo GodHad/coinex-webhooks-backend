@@ -50,19 +50,19 @@ router.get('/all-hooks', adminAuth, async (req, res) => {
 })
 
 router.post('/hooks/create', adminAuth, async (req: JWTRequest, res) => {
-    const { name, timeframe, riskLevel, imageUrl, recommendedLeverage, description } = req.body;
+    const { name, description, timeframe, riskLevel, imageUrl, color, iconType } = req.body;
     try {
         const userId = req.user?.userId;
 
         const newHook = new PremiumHook({
             name,
+            description,
             timeframe,
             riskLevel,
             creator: userId,
-            enabled: true,
             imageUrl,
-            description,
-            recommendedLeverage
+            color,
+            iconType
         });
         await newHook.save();
 
@@ -82,14 +82,14 @@ router.post('/hooks/create', adminAuth, async (req: JWTRequest, res) => {
 });
 
 router.put('/hooks/update/:id', adminAuth, async (req: JWTRequest, res) => {
-    const { name, timeframe, riskLevel, enabled, imageUrl, recommendedLeverage, description } = req.body;
+    const { name, description, timeframe, riskLevel, imageUrl, color, iconType } = req.body;
     const id = req.params.id;
     const userId = req.user?.userId
 
     try {
         const dependingHooks = await Hook.find({ adminHook: id });
 
-        const updatedHook = await PremiumHook.findByIdAndUpdate(id, { name, timeframe, riskLevel, enabled, imageUrl, recommendedLeverage, description }, { new: true });
+        const updatedHook = await PremiumHook.findByIdAndUpdate(id, { name, timeframe, riskLevel, color, imageUrl, iconType, description }, { new: true });
         await User.findByIdAndUpdate(
             userId,
             { $set: { updatedAt: new Date() } },
@@ -125,10 +125,15 @@ router.delete('/hooks/:id', adminAuth, async (req: JWTRequest, res) => {
 
 router.post('/create-pair', adminAuth, async (req: JWTRequest, res) => {
     const { premiumHookId, pair } = req.body;
+    const { alertName, recommendedLeverage, timeframe, enabled } = pair;
     try {
         const newAdminHook = new AdminHook({
-            pair,
+            pair: pair.pair,
             url: uuidv4(),
+            alertName,
+            recommendedLeverage,
+            timeframe,
+            enabled,
         });
         await newAdminHook.save();
 
@@ -146,18 +151,18 @@ router.post('/create-pair', adminAuth, async (req: JWTRequest, res) => {
             pair: newAdminHook,
         });
     } catch (error) {
-        console.error("Error during creating piar:", error);
+        console.error("Error during creating pair:", error);
         return res.status(500).json({ message: 'Server error' });
     }
 });
 
 router.put('/update-pair/:pairId', adminAuth, async (req: JWTRequest, res) => {
     const { pairId } = req.params;
-    const { pair } = req.body;
+    const { pair, alertName, enabled, recommendedLeverage, status, timeframe } = req.body;
     try {
         const adminHook = await AdminHook.findByIdAndUpdate(
             pairId,
-            { $set: { pair } },
+            { $set: { pair, alertName, enabled, recommendedLeverage, status, timeframe } },
             { new: true }
         );
 

@@ -1,6 +1,5 @@
 // models/User.js
 import mongoose, { Document, Schema } from 'mongoose';
-import cryto from 'node:crypto';
 
 export interface IUser extends Document {
     firstName: string;
@@ -38,7 +37,7 @@ const userSchema = new Schema<IUser>(
         lastName: { type: String, required: true },
         email: { type: String, required: true, unique: true },
         password: { type: String, required: true },
-        subscribed: { type: Number, default: 0 },
+        subscribed: { type: Number, default: 0 }, // 0: free, 1: standard, 2: premium
         subscribeEndDate: { type: Date },
         isAdmin: { type: Boolean, default: false },
         status: { type: Number, default: 0 },

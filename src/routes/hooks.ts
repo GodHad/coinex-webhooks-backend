@@ -331,6 +331,9 @@ router.get('/admin-hooks', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRe
                                 trades: 0,
                                 winRate: 0,
                                 pnl: 0
+                            },
+                            total: {
+                                trades: 0,
                             }
                         }
         
@@ -405,6 +408,10 @@ router.get('/admin-hooks', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRe
                             pnl: total7dPnl,
                             winRate: winRate7d
                         };
+
+                        communityStats.total = {
+                            trades: histories.length,
+                        }
         
                         return {
                             ...hook.toObject(),

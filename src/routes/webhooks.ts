@@ -1,4 +1,6 @@
 import express from 'express';
+import * as hl from "@nktkas/hyperliquid";
+import { privateKeyToAccount } from "viem/accounts";
 import Hook from '../models/Hook';
 import History from '../models/History';
 import axios from 'axios';
@@ -255,9 +257,34 @@ router.get('/resend/:id', jwtAuth, webhooksMaintenanceMiddleware, async (req, re
     }
 });
 
-// router.get('/test', async (req, res) => {
-//     const result = await checkOrderExisting('SOLUSDT', 'sell', '842797C7FFFE4C3789F895B4259D7C88', '14D24FB43E72A33E947B765918CEF6F00A2A18260959AC64');
-//     return res.status(200).json({ result })
-// })
+router.get('/test', async (req, res) => {
+    try {
+        const account = privateKeyToAccount("0xa1b4f39a28662cb7d8f957df00c58e9e783c04f34e99b52b833ec03f647240d1");
+        
+        const transport = new hl.HttpTransport();
+        const exchClient = new hl.ExchangeClient({ wallet: account, transport });
+        
+        // Place an orders
+        const result = await exchClient.order({
+            orders: [{
+                a: 0,
+                b: true,
+                p: "30000",
+                s: "0.1",
+                r: false,
+                t: {
+                    limit: {
+                        tif: "Gtc",
+                    },
+                },
+            }],
+            grouping: "na",
+        });
+        return res.status(200).json({ result })
+    } catch (error) {
+        console.error('Error during test:', error);
+        return res.status(500).json({ data: error });
+    }
+})
 
 export default router;

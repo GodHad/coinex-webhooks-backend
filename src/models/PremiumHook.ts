@@ -6,12 +6,11 @@ import { IUser } from './User';
 export interface IPremiumHook extends Document {
     creator: Types.ObjectId | IUser;
     name: string;
-    timeframe: string;
     description: string;
     imageUrl: string;
     riskLevel: 'High' | 'Medium' | 'Low';
-    recommendedLeverage: string;
-    enabled: boolean;
+    color: string;
+    iconType: string;
     pairs: [Types.ObjectId] | [IAdminHook]
 }
 
@@ -19,12 +18,11 @@ const premiumHookSchema = new mongoose.Schema(
     {
         creator: { type: Types.ObjectId, ref: 'User', required: true },
         name: { type: String, required: true },
-        timeframe: { type: String },
         description: { type: String },
         imageUrl: { type: String, required: true },
         riskLevel: { type: String, enum: ['High', 'Medium', 'Low'] },
-        recommendedLeverage: { type: String },
-        enabled: { type: Boolean, required: true },
+        color: { type: String },
+        iconType: { type: String },
         pairs: { type: [Types.ObjectId], ref: 'AdminHook', default: [] },
     },
     { timestamps: true }

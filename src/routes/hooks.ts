@@ -358,7 +358,7 @@ router.get('/admin-hooks', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRe
                                 'data.created_at': { $gt: last7dStart, $lt: now }
                             }),
                             History.find({
-                                hook: { $in: hookIds },
+                                hook: userHook?._id,
                                 'data.code': 0
                             }).sort({ createdAt: -1 }).limit(5)
                         ]);

@@ -219,19 +219,14 @@ router.get('/admin-hooks', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRe
 
         if (!user) return res.status(400).json({ message: 'User not found' });
         let hooks = null;
-        if (user.isAdmin) {
-            hooks = await PremiumHook.find().populate('pairs');
-        }
-        else {
-            hooks = await PremiumHook
-                .find()
-                .populate({
-                    path: 'pairs',
-                    select: '-url',
-                    match: { enabled: true }, // 👈 Only get pairs where enabled === true
-                })
-                .select('-__v');
-        }
+        hooks = await PremiumHook
+            .find()
+            .populate({
+                path: 'pairs',
+                select: '-url',
+                match: { enabled: true },
+            })
+            .select('-__v');
 
         const adminHookswithHook = await Promise.all(hooks.map(async premium => {
             const perAdminStats = await Promise.all(

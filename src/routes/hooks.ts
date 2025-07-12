@@ -217,6 +217,8 @@ router.get('/admin-hooks', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRe
     try {
         const user = await User.findById(req.user?.userId);
 
+        const enabled = req.query.enabled === 'true';
+
         if (!user) return res.status(400).json({ message: 'User not found' });
         let hooks = null;
         hooks = await PremiumHook
@@ -224,7 +226,7 @@ router.get('/admin-hooks', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRe
             .populate({
                 path: 'pairs',
                 select: '-url',
-                match: { enabled: true },
+                match: enabled ? { enabled: true } : {},
             })
             .select('-__v');
 

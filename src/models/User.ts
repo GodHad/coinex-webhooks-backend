@@ -42,7 +42,7 @@ const userSchema = new Schema<IUser>(
         subscribeEndDate: { type: Date },
         isAdmin: { type: Boolean, default: false },
         isSubAdmin: { type: Boolean, default: false },
-        status: { type: Number, default: 0 }, // 0: inactive, 1: active, 2: suspended
+        status: { type: Number, default: 1 }, // 0: inactive, 1: active, 2: suspended
         otp: { type: String, default: null },
         otpExpires: { type: Date, default: null },
         activeAccount: { type: Number, default: null },

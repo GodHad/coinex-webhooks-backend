@@ -225,7 +225,7 @@ router.get('/admin-hooks', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRe
             .find()
             .populate({
                 path: 'pairs',
-                select: '-url',
+                select: `${enabled ? '-url' : '-__v'}`,
                 match: enabled ? { enabled: true } : {},
             })
             .select('-__v');

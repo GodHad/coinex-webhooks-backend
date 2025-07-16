@@ -39,7 +39,7 @@ export const adminAuth = async (req: AuthRequest, res: Response, next: NextFunct
         }
 
         const user = await User.findById(decoded.userId);
-        if (!user || !user.isAdmin) {
+        if (!user || (!user.isAdmin && !user.isSubAdmin)) {
             res.status(403).json({ message: 'You don\'t have permission for admin' });
             return;
         }

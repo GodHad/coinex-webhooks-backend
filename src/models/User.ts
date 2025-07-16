@@ -9,6 +9,7 @@ export interface IUser extends Document {
     subscribed: number;
     subscribeEndDate?: Date;
     isAdmin: boolean;
+    isSubAdmin: boolean;
     inviteCode?: string;
     status: number;
     otp: string | null;
@@ -40,7 +41,8 @@ const userSchema = new Schema<IUser>(
         subscribed: { type: Number, default: 0 }, // 0: free, 1: standard, 2: premium
         subscribeEndDate: { type: Date },
         isAdmin: { type: Boolean, default: false },
-        status: { type: Number, default: 0 },
+        isSubAdmin: { type: Boolean, default: false },
+        status: { type: Number, default: 0 }, // 0: inactive, 1: active, 2: suspended
         otp: { type: String, default: null },
         otpExpires: { type: Date, default: null },
         activeAccount: { type: Number, default: null },

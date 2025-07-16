@@ -31,16 +31,10 @@ router.put('/update-subscribe/:id', adminAuth, async (req, res) => {
             return res.status(400).json({ message: 'User not found' });
         }
 
-        const subscribed = user.subscribed;
-        if (subscribed === 0 || subscribed === 3) {
-            user.subscribed = 2;
-            const currentDate = new Date();
-            currentDate.setFullYear(currentDate.getFullYear() + 1);
+        const { subscribed, subscribeEndDate } = req.body;
 
-            user.subscribeEndDate = currentDate;
-        } else {
-            user.subscribed = 0;
-        }
+        user.subscribed = subscribed;
+        user.subscribeEndDate = subscribeEndDate;
 
         await user.save();
         return res.status(200).json({ user, message: 'Update Subscription Successfully' })
@@ -49,6 +43,27 @@ router.put('/update-subscribe/:id', adminAuth, async (req, res) => {
         return res.status(500).json({ message: 'Server Error' });
     }
 });
+
+router.put('/toggle-subadmin/:id', adminAuth, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const user = await User.findById(id);
+        if (!user) {
+            return res.status(400).json({ message: 'User not found' });
+        }
+
+        user.isSubAdmin = !user.isSubAdmin;
+        await user.save();
+
+        return res.status(200).json({
+            user,
+            message: user.isSubAdmin ? 'Role upgraded: Sub Admin unlocked!' : 'Downgraded to general user. Flexibility restored.'
+        });
+    } catch (error) {
+        console.error("Erro while toggle sub admin", error);
+        return res.status(500).json({ message: 'Server error' });
+    }
+})
 
 router.put('/reset-password/:id', adminAuth, async (req, res) => {
     try {
@@ -71,9 +86,24 @@ router.put('/reset-password/:id', adminAuth, async (req, res) => {
     }
 })
 
-router.delete('/delete/:id', adminAuth, async (req, res) => {
+router.delete('/delete/:id', adminAuth, async (req: JWTRequest, res) => {
     try {
         const { id } = req.params;
+        const userId = req.user?.userId;
+        if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+        const user = await User.findById(userId);
+
+        if (!user?.isAdmin && user?.isSubAdmin) {
+            const requestedUser = await User.findById(id);
+            if (requestedUser?.isAdmin) {
+                return res.status(403).json({
+                    success: false,
+                    message: 'You can\'t delete Admin User'
+                });
+            }
+        }
+        
         await User.findByIdAndDelete(id);
         return res.status(200).json({ message: 'Delete successful' });
     } catch (error) {

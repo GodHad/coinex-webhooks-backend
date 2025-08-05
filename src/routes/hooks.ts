@@ -79,7 +79,6 @@ router.post('/create', jwtAuth, siteMaintenanceMiddleware, async (req: JWTReques
             takeProfitPrice,
             stopLossPrice,
             isSubscribed,
-            unit: req.body.unit,
             amount: req.body.amount || 0
         });
 
@@ -132,7 +131,6 @@ router.put('/update/:id', jwtAuth, siteMaintenanceMiddleware, async (req: JWTReq
             // takeProfitPrice,
             // stopLossPrice,
             status,
-            unit: req.body.unit,
         };
 
         if (!isUsingAdminHook) {

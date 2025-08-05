@@ -33,7 +33,7 @@ router.get('/', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRequest, res)
 });
 
 router.post('/create', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRequest, res) => {
-    const { coinExApiKey, coinExApiSecret, name, tradeDirection, takeProfitPrice, stopLossPrice, isUsingAdminHook } = req.body;
+    const { coinExApiKey, coinExApiSecret, name, tradeDirection, unit, takeProfitPrice, stopLossPrice, isUsingAdminHook } = req.body;
 
     try {
         const userId = req.user?.userId;
@@ -75,6 +75,7 @@ router.post('/create', jwtAuth, siteMaintenanceMiddleware, async (req: JWTReques
             coinExApiKey,
             coinExApiSecret,
             tradeDirection,
+            unit,
             takeProfitPrice,
             stopLossPrice,
             isSubscribed,
@@ -101,7 +102,7 @@ router.post('/create', jwtAuth, siteMaintenanceMiddleware, async (req: JWTReques
 
 
 router.put('/update/:id', jwtAuth, siteMaintenanceMiddleware, async (req: JWTRequest, res) => {
-    const { coinExApiKey, coinExApiSecret, name, status, tradeDirection, /*takeProfitPrice, stopLossPrice,*/ isUsingAdminHook } = req.body;
+    const { coinExApiKey, coinExApiSecret, name, status, tradeDirection, unit, /*takeProfitPrice, stopLossPrice,*/ isUsingAdminHook } = req.body;
     const { id } = req.params;
 
     try {
@@ -126,6 +127,7 @@ router.put('/update/:id', jwtAuth, siteMaintenanceMiddleware, async (req: JWTReq
             coinExApiSecret,
             name,
             tradeDirection,
+            unit,
             // takeProfitPrice,
             // stopLossPrice,
             status,

@@ -8,6 +8,7 @@ export interface IHook extends Document {
     name: string;
     url?: string;
     amount?: string;
+    unit?: string;
     coinExApiKey: string;
     coinExApiSecret: string;
     status: number;
@@ -34,6 +35,7 @@ const hookSchema = new Schema<IHook>(
         name: { type: String, required: true },
         url: { type: String },
         amount: { type: Number },
+        unit: { type: String },
         coinExApiKey: { type: String, required: true },
         coinExApiSecret: { type: String, required: true },
         status: { type: Number, default: 0 },

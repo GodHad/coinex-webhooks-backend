@@ -4,8 +4,11 @@ import History, { IHistory } from "../models/History";
 import Hook, { IHook } from "../models/Hook";
 import { sendEmail } from "./sendMail";
 import User from "../models/User";
+import dotenv from 'dotenv';
 
-const commonURL = 'https://api.coinex.com';
+dotenv.config();
+
+const commonURL = process.env.COINEX_API_URL;
 
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -19,7 +22,7 @@ function createAuthorization(method: string, request_path: string, body_json: st
 }
 
 const getTimestamp = async () => {
-    const response = await axios.get('https://api.coinex.com/v2/time');
+    const response = await axios.get(commonURL + '/v2/time');
     const timestamp = response.data.data.timestamp.toString();
     return timestamp;
 }
@@ -46,6 +49,95 @@ export const checkOrderExisting = async (symbol: string, action: string, coinExA
     return pendingOrders;
 }
 
+/**
+ * Helper to compute the trade amount when a percentage based order is
+ * requested. When the unit is '%', the `amount` argument is interpreted as
+ * a percentage of the available balance in the futures account (denominated
+ * in the quote currency of the trading pair).  The helper fetches the
+ * available balance via the Asset API (`/perpetual/v1/asset/query`) and the
+ * latest market price via the Market API (`/perpetual/v1/market/ticker`).
+ * It converts the percentage of available funds into an asset quantity by
+ * dividing by the current price.  If any of the API calls fail, or the
+ * inputs are invalid, the original `amountStr` is returned unchanged.
+ *
+ * @param unit  Unit indicator (only '%' triggers percentage logic)
+ * @param amountStr  The requested amount or percentage as a string
+ * @param symbol  Market symbol (e.g. "BTCUSDT")
+ * @param coinExApiKey  API key for CoinEx
+ * @param coinExApiSecret API secret for CoinEx
+ */
+const computePercentageAmount = async (
+    unit: string | undefined,
+    amountStr: string,
+    symbol: string,
+    coinExApiKey: string,
+    coinExApiSecret: string,
+    _isClosing: boolean
+): Promise<string> => {
+    if (!unit || unit !== '%') {
+        return amountStr;
+    }
+
+    const percentage = parseFloat(amountStr);
+    if (isNaN(percentage) || percentage <= 0) {
+        return amountStr;
+    }
+
+    try {
+        // Determine the quote currency by matching common suffixes
+        const quoteCandidates = ['USDT', 'USDC', 'USD', 'BUSD', 'TUSD'];
+        let quote = '';
+        for (const q of quoteCandidates) {
+            if (symbol.endsWith(q)) {
+                quote = q;
+                break;
+            }
+        }
+        if (!quote) {
+            // Default to USDT if no known suffix is found
+            quote = 'USDT';
+        }
+
+        // Fetch available balances for all assets (requires signature)
+        const balanceResult = await handleGetDataFromCoinex(
+            coinExApiKey,
+            coinExApiSecret,
+            '/perpetual/v1/asset/query'
+        );
+
+        if (!balanceResult.success || !balanceResult.data || balanceResult.data.code !== 0) {
+            return amountStr;
+        }
+
+        const assets = balanceResult.data.data;
+        if (!assets || !assets[quote] || !assets[quote].available) {
+            return amountStr;
+        }
+
+        const availableBalance = parseFloat(assets[quote].available);
+        if (isNaN(availableBalance) || availableBalance <= 0) {
+            return amountStr;
+        }
+
+        // Fetch latest market price (no signature required)
+        const marketTickerUrl = `/perpetual/v1/market/ticker?market=${symbol}`;
+        const priceRes = await axios.get(commonURL + marketTickerUrl);
+        const tickerData = priceRes.data?.data?.ticker;
+        const lastPrice = tickerData ? parseFloat(tickerData.last) : NaN;
+        if (!tickerData || isNaN(lastPrice) || lastPrice <= 0) {
+            return amountStr;
+        }
+
+        // Calculate the amount in quote currency and convert to asset quantity
+        const portionOfBalance = (availableBalance * percentage) / 100;
+        const assetQty = portionOfBalance / lastPrice;
+        return assetQty.toFixed(8);
+    } catch (err) {
+        // On any error, fallback to original amount
+        return amountStr;
+    }
+};
+
 const placeOrderOnCoinEx = async (
     symbol: string,
     action: string,
@@ -53,6 +145,7 @@ const placeOrderOnCoinEx = async (
     coinExApiKey: string,
     coinExApiSecret: string,
     isClosing: boolean,
+    unit?: string,
 ): Promise<{ success: boolean; data?: any; error?: any }> => {
     const timestamp = await getTimestamp();
 
@@ -68,12 +161,16 @@ const placeOrderOnCoinEx = async (
         }
     }
 
+    // Determine the final order size. When `unit` is '%', the amount is
+    // treated as a percentage of the current open position.
+    const finalAmount = await computePercentageAmount(unit, amount, symbol, coinExApiKey, coinExApiSecret, isClosing);
+
     const data = JSON.stringify({
         market: symbol,
         market_type: 'FUTURES',
         side: action,
         type: 'market',
-        amount: amount,
+        amount: finalAmount,
     });
 
     try {
@@ -110,7 +207,7 @@ const getPositionData = async (
     const url = `/v2/futures/pending-position?market=${symbol}&market_type=FUTURES&page=1&limit=1`
 
     try {
-        const result = await axios.get('https://api.coinex.com' + url, {
+        const result = await axios.get(commonURL + url, {
             headers: {
                 'Content-Type': 'application/json; charset=utf-8',
                 Accept: 'application/json',
@@ -184,6 +281,7 @@ export const handleTrade = async (
     action: string,
     amount: string,
     history?: IHistory,
+    unit?: string,
 ): Promise<{ success: boolean; message?: string }> => {
     const requiredActions = history ? [{
         action: history.action,
@@ -198,7 +296,8 @@ export const handleTrade = async (
             amount,
             webhook.coinExApiKey,
             webhook.coinExApiSecret,
-            isClosing
+            isClosing,
+            unit
         );
 
         if (history) {
@@ -239,7 +338,7 @@ export const handleTrade = async (
                         ''
                     )
                 }
-                await handleTrade(webhook, newHistory.symbol, newHistory.action, newHistory.amount, newHistory);
+                await handleTrade(webhook, newHistory.symbol, newHistory.action, newHistory.amount, newHistory, unit);
             }
 
             if (success && data && data.code === 0) {
@@ -382,7 +481,7 @@ export const handleGetDataFromCoinex = async (
 ): Promise<{ success: boolean, data?: any; error?: any }> => {
     const timestamp = await getTimestamp();
     try {
-        const result = await axios.get('https://api.coinex.com' + url, {
+        const result = await axios.get(commonURL + url, {
             headers: {
                 'Content-Type': 'application/json; charset=utf-8',
                 Accept: 'application/json',
@@ -419,7 +518,7 @@ export const handleGetHistoryDataFromCoinex = async (
             const timestamp = await getTimestamp();
             const url = `/v2/futures/pending-position?market_type=FUTURES&page=${page}&limit=100`;
 
-            const result = await axios.get('https://api.coinex.com' + url, {
+            const result = await axios.get(commonURL + url, {
                 headers: {
                     'Content-Type': 'application/json; charset=utf-8',
                     Accept: 'application/json',
@@ -453,7 +552,7 @@ export const handleGetHistoryDataFromCoinex = async (
             let url = `/v2/futures/finished-position?market_type=FUTURES&page=${page}&limit=100`;
             if (startTime) url += `&start_time=${startTime}`
 
-            const result = await axios.get('https://api.coinex.com' + url, {
+            const result = await axios.get(commonURL + url, {
                 headers: {
                     'Content-Type': 'application/json; charset=utf-8',
                     Accept: 'application/json',

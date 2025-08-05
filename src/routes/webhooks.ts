@@ -56,7 +56,7 @@ router.post('/:webhookUrl', webhooksMaintenanceMiddleware, async (req, res) => {
                     continue;
                 }
 
-                const result = await handleTrade(webhook, ticker, action, webhook.amount || amount);
+                const result = await handleTrade(webhook, ticker, action, webhook.amount || amount, undefined, webhook.unit);
                 
                 results.push({
                     webhookId: webhook._id,
@@ -78,7 +78,7 @@ router.post('/:webhookUrl', webhooksMaintenanceMiddleware, async (req, res) => {
             return res.status(400).json({ message: 'Webhook URL is not available or disabled' });
         }
 
-        const result = await handleTrade(webhook, ticker, action, webhook.amount || amount);
+        const result = await handleTrade(webhook, ticker, action, webhook.amount || amount, undefined, webhook.unit);
         if (!result.success) {
             return res.status(500).json({ message: result.message });
         }
@@ -221,7 +221,7 @@ router.post('/:username/:webhookUrl', webhooksMaintenanceMiddleware, async (req,
             return res.status(400).json({ message: 'Invalid request payload' });
         }
 
-        const result = await handleTrade(webhook, ticker, action, webhook.amount || amount);
+        const result = await handleTrade(webhook, ticker, action, webhook.amount || amount, undefined, webhook.unit);
         if (!result.success) {
             return res.status(500).json({ message: result.message });
         }
@@ -242,7 +242,7 @@ router.get('/resend/:id', jwtAuth, webhooksMaintenanceMiddleware, async (req, re
         const webhook = await Hook.findById(history?.hook).populate<{ creator: IUser }>('creator');
 
         if (history && webhook) {
-            const result = await handleTrade(webhook, history.symbol, history.action, history.amount, history);
+            const result = await handleTrade(webhook, history.symbol, history.action, history.amount, history, webhook.unit);
             if (!result.success) {
                 return res.status(500).json({ message: result.message });
             }

@@ -39,7 +39,7 @@ const generateReqeust = (method: string, url: string, isoDate: string, payloadMe
 
 export const createCoinPaymentsInvoice = async (currency: string, amount: number, paymentCurrency: string, refundEmail: string) => {
     const method = 'POST';
-    const url = 'https://api.coinpayments.com/api/v2/merchant/invoices';
+    const url = (process.env.COINPAYMENTS_API_URL || '') + '/v2/merchant/invoices';
     const isoDate = new Date().toISOString().split('.')[0];
 
     const dataPayload = {
@@ -85,9 +85,8 @@ export const getInvoiceByPaymentMethod = async (id: string, symbol: 'BTC' | 'ETH
         'LTCT': 1002, 
     };
 
-    console.log(symbol, id, ids[symbol])
     const method = 'GET';
-    const url = `https://api.coinpayments.com/api/v1/invoices/${id}/payment-currencies/${ids[symbol]}`;
+    const url = `${process.env.COINPAYMENTS_API_URL}/v1/invoices/${id}/payment-currencies/${ids[symbol]}`;
     const isoDate = new Date().toISOString().split('.')[0];
 
     const request = generateReqeust(method, url, isoDate);

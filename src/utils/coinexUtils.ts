@@ -49,6 +49,49 @@ export const checkOrderExisting = async (symbol: string, action: string, coinExA
     return pendingOrders;
 }
 
+async function fetchFuturesAvailableBalance(
+    quote: string,
+    coinExApiKey: string,
+    coinExApiSecret: string
+): Promise<number | undefined> {
+    const timestamp = await getTimestamp();
+    // v2 balance endpoint – according to the documentation, the account_type
+    // parameter distinguishes futures from spot or margin accounts.  See
+    // https://docs.coinex.com/api/v2/assets/balance/http/get-futures-balance
+    const path = `/v2/assets/futures/balance`;
+    console.log(quote, coinExApiKey)
+    const res = await axios.get(commonURL + path, {
+        headers: {
+            'X-COINEX-KEY': coinExApiKey,
+            'X-COINEX-SIGN': createAuthorization('GET', path, '', timestamp, coinExApiSecret),
+            'X-COINEX-TIMESTAMP': timestamp,
+        },
+    });
+    if (res.data && res.data.code === 0) {
+        // The v2 response may return an array of assets or a keyed object.
+        const data = res.data.data;
+    console.log('availableBalance: ', data);
+        if (Array.isArray(data)) {
+            // Search for the quote currency in array form
+            for (const item of data) {
+                if (item && (item.ccy === quote)) {
+                    const availableStr = item.available;
+                    const available = availableStr !== undefined ? parseFloat(availableStr) : NaN;
+                    if (!isNaN(available)) return available;
+                }
+            }
+        } else if (data && typeof data === 'object') {
+            // Keyed by currency code (similar to v1 format)
+            const entry = data[quote];
+            if (entry && entry.available !== undefined) {
+                const available = parseFloat(entry.available);
+                if (!isNaN(available)) return available;
+            }
+        }
+    }
+    return undefined;
+}
+
 /**
  * Helper to compute the trade amount when a percentage based order is
  * requested. When the unit is '%', the `amount` argument is interpreted as
@@ -84,7 +127,6 @@ const computePercentageAmount = async (
     }
 
     try {
-        // Determine the quote currency by matching common suffixes
         const quoteCandidates = ['USDT', 'USDC', 'USD', 'BUSD', 'TUSD'];
         let quote = '';
         for (const q of quoteCandidates) {
@@ -94,32 +136,15 @@ const computePercentageAmount = async (
             }
         }
         if (!quote) {
-            // Default to USDT if no known suffix is found
             quote = 'USDT';
         }
 
-        // Fetch available balances for all assets (requires signature)
-        const balanceResult = await handleGetDataFromCoinex(
-            coinExApiKey,
-            coinExApiSecret,
-            '/perpetual/v1/asset/query'
-        );
-
-        if (!balanceResult.success || !balanceResult.data || balanceResult.data.code !== 0) {
+        const availableBalance = await fetchFuturesAvailableBalance(quote, coinExApiKey, coinExApiSecret);
+        console.log('availableBalance', availableBalance);
+        if (availableBalance === undefined || availableBalance <= 0) {
             return amountStr;
         }
 
-        const assets = balanceResult.data.data;
-        if (!assets || !assets[quote] || !assets[quote].available) {
-            return amountStr;
-        }
-
-        const availableBalance = parseFloat(assets[quote].available);
-        if (isNaN(availableBalance) || availableBalance <= 0) {
-            return amountStr;
-        }
-
-        // Fetch latest market price (no signature required)
         const marketTickerUrl = `/perpetual/v1/market/ticker?market=${symbol}`;
         const priceRes = await axios.get(commonURL + marketTickerUrl);
         const tickerData = priceRes.data?.data?.ticker;
@@ -128,7 +153,6 @@ const computePercentageAmount = async (
             return amountStr;
         }
 
-        // Calculate the amount in quote currency and convert to asset quantity
         const portionOfBalance = (availableBalance * percentage) / 100;
         const assetQty = portionOfBalance / lastPrice;
         return assetQty.toFixed(8);
@@ -164,6 +188,7 @@ const placeOrderOnCoinEx = async (
     // Determine the final order size. When `unit` is '%', the amount is
     // treated as a percentage of the current open position.
     const finalAmount = await computePercentageAmount(unit, amount, symbol, coinExApiKey, coinExApiSecret, isClosing);
+    console.log(finalAmount)
 
     const data = JSON.stringify({
         market: symbol,

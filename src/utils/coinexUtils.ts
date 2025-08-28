@@ -59,7 +59,6 @@ async function fetchFuturesAvailableBalance(
     // parameter distinguishes futures from spot or margin accounts.  See
     // https://docs.coinex.com/api/v2/assets/balance/http/get-futures-balance
     const path = `/v2/assets/futures/balance`;
-    console.log(quote, coinExApiKey)
     const res = await axios.get(commonURL + path, {
         headers: {
             'X-COINEX-KEY': coinExApiKey,
@@ -70,7 +69,6 @@ async function fetchFuturesAvailableBalance(
     if (res.data && res.data.code === 0) {
         // The v2 response may return an array of assets or a keyed object.
         const data = res.data.data;
-        console.log('availableBalance: ', data);
         if (Array.isArray(data)) {
             // Search for the quote currency in array form
             for (const item of data) {
@@ -92,9 +90,20 @@ async function fetchFuturesAvailableBalance(
     return undefined;
 }
 
-async function fetchTickerPriceV2(symbol: string): Promise<number | undefined> {
-    const path = `/v2/futures/market/ticker?market=${encodeURIComponent(symbol)}`;
-    const res = await axios.get(commonURL + path);
+async function fetchTickerPriceV2(
+    symbol: string,
+    coinExApiKey: string,
+    coinExApiSecret: string
+): Promise<number | undefined> {
+    const timestamp = await getTimestamp();
+    const path = `/v2/futures/ticker?market=${encodeURIComponent(symbol)}`;
+    const res = await axios.get(commonURL + path, {
+        headers: {
+            'X-COINEX-KEY': coinExApiKey,
+            'X-COINEX-SIGN': createAuthorization('GET', path, '', timestamp, coinExApiSecret),
+            'X-COINEX-TIMESTAMP': timestamp,
+        }
+    });
 
     if (res.data?.code !== 0) return undefined;
 
@@ -129,6 +138,45 @@ async function fetchLeverageFromPendingPosition(
     return undefined;
 }
 
+async function fetchLeverageFromLastFinishedPosition(
+    symbol: string,
+    coinExApiKey: string,
+    coinExApiSecret: string
+): Promise<number | undefined> {
+    const timestamp = await getTimestamp();
+    const path = `/v2/futures/finished-position?market=${encodeURIComponent(symbol)}&market_type=FUTURES&page=1&limit=1`;
+
+    const res = await axios.get(commonURL + path, {
+        headers: {
+            'X-COINEX-KEY': coinExApiKey,
+            'X-COINEX-SIGN': createAuthorization('GET', path, '', timestamp, coinExApiSecret),
+            'X-COINEX-TIMESTAMP': timestamp,
+        },
+    });
+
+    if (res.data?.code === 0 && Array.isArray(res.data?.data) && res.data.data.length) {
+        const row = res.data.data[0];
+        const lev = Number(row?.leverage ?? row?.position?.leverage);
+        if (Number.isFinite(lev) && lev > 0) return lev;
+    }
+    return undefined;
+}
+
+async function resolveLeverage(
+    symbol: string,
+    coinExApiKey: string,
+    coinExApiSecret: string
+): Promise<number> {
+    const fromPending = await fetchLeverageFromPendingPosition(symbol, coinExApiKey, coinExApiSecret);
+    if (fromPending && fromPending > 0) return fromPending;
+
+    const fromFinished = await fetchLeverageFromLastFinishedPosition(symbol, coinExApiKey, coinExApiSecret);
+    if (fromFinished && fromFinished > 0) return fromFinished;
+
+    return 3;
+}
+
+
 /**
  * Helper to compute the trade amount when a percentage based order is
  * requested. When the unit is '%', the `amount` argument is interpreted as
@@ -160,39 +208,19 @@ const computePercentageAmount = async (
     if (!Number.isFinite(percent) || percent <= 0) return amountStr;
 
     try {
-        if (isClosing) {
-            const timestamp = await getTimestamp();
-            const path = `/v2/futures/pending-position?market=${encodeURIComponent(symbol)}&market_type=FUTURES&page=1&limit=1`;
-            const res = await axios.get(commonURL + path, {
-                headers: {
-                    'X-COINEX-KEY': coinExApiKey,
-                    'X-COINEX-SIGN': createAuthorization('GET', path, '', timestamp, coinExApiSecret),
-                    'X-COINEX-TIMESTAMP': timestamp,
-                },
-            });
-            const pos = res.data?.code === 0 ? res.data?.data?.[0] : undefined;
-            const size = pos ? Number(pos.amount) : NaN;
-            if (!Number.isFinite(size) || size <= 0) return amountStr;
+        const quote = ['USDT', 'USDC', 'USD', 'BUSD', 'TUSD'].find(q => symbol.endsWith(q)) || 'USDT';
 
-            const qty = (size * percent) / 100;
-            return qty.toFixed(8);
-        }
-
-        const quoteCandidates = ['USDT', 'USDC', 'USD', 'BUSD', 'TUSD'];
-        let quote = quoteCandidates.find(q => symbol.endsWith(q)) || 'USDT';
-
-        const [availableBalance, lastPrice, levMaybe] = await Promise.all([
+        const [availableBalance, lastPrice] = await Promise.all([
             fetchFuturesAvailableBalance(quote, coinExApiKey, coinExApiSecret),
-            fetchTickerPriceV2(symbol),
-            fetchLeverageFromPendingPosition(symbol, coinExApiKey, coinExApiSecret),
+            fetchTickerPriceV2(symbol, coinExApiKey, coinExApiSecret),
         ]);
 
-        if (
-            availableBalance === undefined || availableBalance <= 0 ||
-            !lastPrice || !Number.isFinite(lastPrice)
-        ) return amountStr;
+        if (availableBalance === undefined || availableBalance <= 0 || !lastPrice || !Number.isFinite(lastPrice)) {
+            return amountStr;
+        }
 
-        const leverage = levMaybe && levMaybe > 0 ? levMaybe : 1;
+        const leverage = await resolveLeverage(symbol, coinExApiKey, coinExApiSecret);
+
         const marginPortion = (availableBalance * percent) / 100;
         const notional = marginPortion * leverage;
         const assetQty = notional / lastPrice;
@@ -229,7 +257,6 @@ const placeOrderOnCoinEx = async (
     // Determine the final order size. When `unit` is '%', the amount is
     // treated as a percentage of the current open position.
     const finalAmount = await computePercentageAmount(unit, amount, symbol, coinExApiKey, coinExApiSecret, isClosing);
-    console.log(finalAmount)
 
     const data = JSON.stringify({
         market: symbol,

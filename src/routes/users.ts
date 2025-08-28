@@ -103,7 +103,7 @@ router.delete('/delete/:id', adminAuth, async (req: JWTRequest, res) => {
                 });
             }
         }
-        
+
         await User.findByIdAndDelete(id);
         return res.status(200).json({ message: 'Delete successful' });
     } catch (error) {
@@ -403,6 +403,78 @@ router.post('/request-subscription', jwtAuth, async (req: JWTRequest, res) => {
     } catch (error) {
         console.error("Error request subscription: ", error);
         return res.status(500).json({ message: 'Server error' });
+    }
+});
+
+router.get('/card-info', jwtAuth, async (req: JWTRequest, res) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+        const user = await User.findById(userId);
+
+        const hooks = await Hook.find({ creator: userId });
+        const uniqueHooksMap = new Map<string, typeof hooks[number]>();
+        hooks.forEach(h => {
+            const key = `${h.coinExApiKey}::${h.coinExApiSecret}`;
+            if (!uniqueHooksMap.has(key)) uniqueHooksMap.set(key, h);
+        });
+        const uniqueHooks = Array.from(uniqueHooksMap.values());
+
+        const positionHistories = await PositionHistory.find({
+            hook: { $in: uniqueHooks.map(h => h._id) }
+        }).lean();
+
+        const getRealizedPnl = (h: any) => {
+            const d = h?.data || {};
+            const v =
+                d.realized_pnl ??
+                d.close_pnl ??
+                d.pnl_usdt ??
+                0;
+            const n = Number(v);
+            return Number.isFinite(n) ? n : 0;
+        };
+
+        const getClosedMs = (h: any) => {
+            const d = h?.data || {};
+            const v =
+                d.created_at ??
+                d.close_time ??
+                (h.updatedAt ? new Date(h.updatedAt).getTime() : undefined);
+            const n = Number(v);
+            return Number.isFinite(n) ? n : undefined;
+        };
+
+        const now = new Date();
+        const startOfTodayUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+
+        const isToday = (ms?: number) => ms != null && ms >= startOfTodayUTC;
+
+        const todaysPnlUSDT = positionHistories
+            .filter(h => !!h.finished)
+            .filter(h => isToday(getClosedMs(h)))
+            .reduce((s, h) => s + getRealizedPnl(h), 0);
+
+        const cumulativePnlUSDT = positionHistories
+            .filter(h => !!h.finished)
+            .reduce((s, h) => s + getRealizedPnl(h), 0);
+
+        const totalAssetsUSDT = user?.balance?.total ?? 0;
+
+        const dailyIncomeRate = totalAssetsUSDT ? (todaysPnlUSDT / totalAssetsUSDT) * 100 : 0;
+
+        return res.status(200).json({
+            cumulativePnl: Number(cumulativePnlUSDT),
+            todaysPnl: Number(todaysPnlUSDT),
+            totalAssets: totalAssetsUSDT != null ? Number(totalAssetsUSDT) : 0,
+            dailyIncomeRate: dailyIncomeRate != null ? Number(dailyIncomeRate) : 0,
+            currency: 'USDT'
+        });
+
+    } catch (error) {
+        console.error("Error in get-overview:", error);
+        return res.status(500).json({ error: "Internal server error" });
     }
 });
 

@@ -5,6 +5,7 @@ import Hook, { IHook } from "../models/Hook";
 import { sendEmail } from "./sendMail";
 import User from "../models/User";
 import dotenv from 'dotenv';
+import { renderTradeEmail } from "./tradeEmail";
 
 dotenv.config();
 
@@ -400,17 +401,23 @@ export const handleTrade = async (
             history.resendError = error || null;
             if (user && data && data.code !== 0) {
                 const { code, msg } = describeError(data);
-                await sendEmail(
-                    user.email,
-                    `Trade Failed (${history.symbol})`,
-                    [
-                        `Action: ${history.action.toUpperCase()}`,
-                        `Symbol: ${history.symbol}`,
-                        `Requested amount: ${amount} ${unit === '%' ? `(${amount}% requested)` : ticker.substring(0, -4)}`,
-                        `Reason: ${msg} (code ${code})`,
-                    ].join('\n'),
-                    ''
-                );
+                const { subject, text, html } = renderTradeEmail({
+                    kind: 'error',
+                    action: history.action.toUpperCase() as 'BUY' | 'SELL',
+                    symbol: history.symbol,
+                    requestedAmount: amount,
+                    unit,
+                    computedQty: unit === '%' ? `${amount}` : undefined,
+                    leverageUsed: webhook?.leverage ? Number(webhook.leverage) : undefined,
+                    priceUsed: undefined, 
+                    balanceAvail: undefined,
+                    reasonText: msg,
+                    code,
+                    dashboardUrl: process.env.FRONTEND_URL + '/dashboard',
+                    brand: { name: 'SIGNALYZE', url: process.env.FRONTEND_URL, accent: '#5863F8' },
+                });
+
+                await sendEmail(user.email, subject, text, html);
             }
             await history.save();
         } else {
@@ -431,17 +438,23 @@ export const handleTrade = async (
             if (data && data.code !== 0) {
                 if (user) {
                     const { code, msg } = describeError(data);
-                    await sendEmail(
-                        user.email,
-                        `Trade Failed (${newHistory.symbol})`,
-                        [
-                            `Action: ${newHistory.action.toUpperCase()}`,
-                            `Symbol: ${newHistory.symbol}`,
-                            `Requested amount: ${amount} ${unit === '%' ? `(${amount}% requested)` : ticker.substring(0, -4)}`,
-                            `Reason: ${msg} (code ${code})`,
-                        ].join('\n'),
-                        ''
-                    );
+                    const { subject, text, html } = renderTradeEmail({
+                        kind: 'error',
+                        action: newHistory.action.toUpperCase() as 'BUY' | 'SELL',
+                        symbol: newHistory.symbol,
+                        requestedAmount: amount,
+                        unit,
+                        computedQty: unit === '%' ? `${amount}` : undefined,
+                        leverageUsed: webhook?.leverage ? Number(webhook.leverage) : undefined,
+                        priceUsed: undefined, 
+                        balanceAvail: undefined,
+                        reasonText: msg,
+                        code,
+                        dashboardUrl: process.env.FRONTEND_URL + '/dashboard',
+                        brand: { name: 'SIGNALYZE', url: process.env.FRONTEND_URL, accent: '#5863F8' },
+                    });
+
+                    await sendEmail(user.email, subject, text, html);
                 }
                 await handleTrade(webhook, newHistory.symbol, newHistory.action, newHistory.amount, newHistory, unit);
             }

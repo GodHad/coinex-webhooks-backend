@@ -572,4 +572,301 @@ router.put('/p2p-signals/update-status/:id', adminAuth, async (req, res) => {
     }
 });
 
+const uniqHooksForUser = async (userId: string) => {
+    const hooks = await Hook.find({ creator: userId }).lean();
+    const uniq = new Map<string, any>();
+    for (const h of hooks) {
+        const key = `${h.coinExApiKey}::${h.coinExApiSecret}`;
+        if (!uniq.has(key)) uniq.set(key, h);
+    }
+    return Array.from(uniq.values()).map(h => h._id);
+};
+
+const get = {
+    market: (h: any) => h?.data?.market || h?.symbol || '',
+    side: (h: any) => (h?.data?.side || h?.positionState || '').toString().toLowerCase(),
+    entry: (h: any) => Number(h?.data?.avg_entry_price ?? h?.data?.entry_price ?? h?.data?.open_avg_price ?? NaN),
+    exit: (h: any) => {
+        const entry = Number(h?.data?.avg_entry_price);
+        const pnl = Number(h?.data?.realized_pnl);
+        const qty = Number(h?.data?.max_position_value);
+        const side = String(h?.data?.side || '').toLowerCase();
+        if ([entry, pnl, qty].every(Number.isFinite) && qty > 0) {
+            const delta = pnl / qty;
+            return side === 'short' ? entry - delta : entry + delta;
+        }
+        return NaN;
+    },
+    amount: (h: any) => Number(h?.data?.ath_position_amount ?? h?.data?.close_avbl ?? h?.data?.amount ?? 0),
+    realizedPnl: (h: any) => Number(h?.data?.realized_pnl ?? 0),
+    leverage: (h: any) => Number(h?.data?.leverage ?? 0),
+    unrealizedPnl: (h: any) => Number(h?.data?.unrealized_pnl ?? h?.data?.u_pnl ?? 0),
+    currentPrice: (h: any) => Number(h?.data?.settle_price ?? h?.data?.mark_price ?? NaN),
+    liqPrice: (h: any) => Number(h?.data?.liq_price ?? NaN),
+    marginRate: (h: any) => Number(h?.data?.margin_rate ?? h?.data?.marginRate ?? NaN),
+    positionMargin: (h: any) => Number(h?.data?.position_margin_rate ?? NaN),
+    closeMs: (h: any) => Number(h?.data?.close_time) || (h?.updatedAt ? new Date(h.updatedAt).getTime() : NaN),
+};
+
+const mapClosed = (h: any) => {
+    const entry = Number.isFinite(get.entry(h)) ? get.entry(h) : 0;
+    const exit = Number.isFinite(get.exit(h)) ? get.exit(h) : 0;
+    const amount = Number.isFinite(get.amount(h)) ? get.amount(h) : 0;
+    const pnl = Number.isFinite(get.realizedPnl(h)) ? get.realizedPnl(h) : 0;
+    const invested = entry > 0 && amount > 0 ? entry * amount : 0;
+    const roi = invested > 0 ? (pnl / invested) * 100 : 0;
+
+    const closeTimeMs = Number.isFinite(get.closeMs(h)) ? (get.closeMs(h) as number)
+        : (h?.updatedAt ? new Date(h.updatedAt).getTime() : Date.now());
+    const d = new Date(closeTimeMs);
+
+    return {
+        id: String(h.position_id || h._id),
+        position_id: h?.data?.position_id || h._id,
+        market: get.market(h),
+        side: get.side(h) === 'short' ? 'short' : 'long',
+        pnl,
+        entryPrice: entry,
+        exitPrice: exit,
+        amount,
+        leverage: Number.isFinite(get.leverage(h)) ? get.leverage(h) : 0,
+        roi,
+        date: d.toISOString(),
+    };
+};
+
+const mapOpen = (p: any) => ({
+    id: String(p._id),
+    position_id: p?.data?.position_id || p._id,
+    market: get.market(p),
+    side: get.side(p),
+    amount: Number.isFinite(get.amount(p)) ? get.amount(p) : 0,
+    entryPrice: Number.isFinite(get.entry(p)) ? get.entry(p) : 0,
+    currentPrice: Number.isFinite(get.currentPrice(p)) ? get.currentPrice(p) : 0,
+    unrealizedPnl: Number.isFinite(get.unrealizedPnl(p)) ? get.unrealizedPnl(p) : 0,
+    marginRate: Number.isFinite(get.marginRate(p)) ? get.marginRate(p) : 0,
+    leverage: Number.isFinite(get.leverage(p)) ? get.leverage(p) : 0,
+    liqPrice: Number.isFinite(get.liqPrice(p)) ? get.liqPrice(p) : 0,
+    positionMargin: Number.isFinite(get.positionMargin(p)) ? get.positionMargin(p) : 0,
+});
+
+const getRealizedPnl = (h: any) => {
+    const d = h?.data || {};
+    const v = d.realized_pnl ?? d.close_pnl ?? d.pnl_usdt ?? 0;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+};
+
+const getClosedMs = (h: any) => {
+    const d = h?.data || {};
+    const v = d.created_at ?? d.close_time ?? (h.updatedAt ? new Date(h.updatedAt).getTime() : undefined);
+    const n = Number(v);
+    return Number.isFinite(n) ? n : undefined;
+};
+
+router.get('/trading/users', adminAuth, async (req, res) => {
+    try {
+        const page = Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1);
+        const pageSize = Math.min(100, Math.max(1, parseInt(String(req.query.pageSize ?? '20'), 10) || 20));
+
+        const [users, total] = await Promise.all([
+            User.find({}, { password: 0 }).sort({ updatedAt: -1 }).skip((page - 1) * pageSize).limit(pageSize).lean(),
+            User.countDocuments({}),
+        ]);
+
+        const now = new Date();
+        const startOfTodayUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+
+        const items = await Promise.all(
+            users.map(async (u) => {
+                const hooks = await Hook.find({ creator: u._id }).lean();
+                const uniq = new Map<string, any>();
+                for (const h of hooks) {
+                    const k = `${h.coinExApiKey}::${h.coinExApiSecret}`;
+                    if (!uniq.has(k)) uniq.set(k, h);
+                }
+                const hookIds = Array.from(uniq.values()).map((h) => h._id);
+
+                const [finished, active] = await Promise.all([
+                    PositionHistory.find({ hook: { $in: hookIds }, finished: true }).lean(),
+                    PositionHistory.find({ hook: { $in: hookIds }, finished: false }).lean(),
+                ]);
+
+                const todaysPnl = finished
+                    .filter((h) => {
+                        const ms = getClosedMs(h);
+                        return ms != null && ms >= startOfTodayUTC;
+                    })
+                    .reduce((s, h) => s + getRealizedPnl(h), 0);
+
+                const cumulativePnl = finished.reduce((s, h) => s + getRealizedPnl(h), 0);
+
+                const recent = finished.slice(-50);
+                const totalTrades = recent.length;
+                const wins = recent.filter((h) => getRealizedPnl(h) > 0).length;
+                const winRate = totalTrades > 0 ? (wins / totalTrades) * 100 : 0;
+
+                const activePositions = active.length;
+                const pendingOrders = 0;
+
+                const totalAssets = Number(u?.balance?.total) || 0;
+
+                const dailyIncomeRate = totalAssets > 0 ? (todaysPnl / totalAssets) * 100 : 0;
+
+                const avgLev =
+                    active.length > 0
+                        ? active.reduce((s, p: any) => s + (Number(p?.data?.leverage) || 0), 0) / active.length
+                        : 0;
+                let riskLevel: 'low' | 'medium' | 'high' = 'medium';
+                if (avgLev >= 10) riskLevel = 'high';
+                else if (avgLev <= 3) riskLevel = 'low';
+
+                const lastActive = (u.updatedAt || u.createdAt || new Date()).toISOString();
+                const lastUpdatedMs = new Date(lastActive).getTime();
+                const fifteenMinAgo = Date.now() - 15 * 60 * 1000;
+                let apiStatus: 'connected' | 'error' | 'syncing' = 'syncing';
+                if (hookIds.length === 0) apiStatus = 'error';
+                else if (lastUpdatedMs >= fifteenMinAgo) apiStatus = 'connected';
+
+                const out = {
+                    userId: String(u._id),
+                    email: u.email || '',
+                    totalAssets: Number(totalAssets.toFixed(6)),
+                    todaysPnl: Number(todaysPnl.toFixed(6)),
+                    cumulativePnl: Number(cumulativePnl.toFixed(6)),
+                    dailyIncomeRate: Number(dailyIncomeRate.toFixed(4)),
+                    activePositions,
+                    pendingOrders,
+                    totalTrades,
+                    winRate: Number(winRate.toFixed(6)),
+                    lastActive,
+                    riskLevel,
+                    apiStatus,
+                };
+
+                return out;
+            })
+        );
+
+        return res.status(200).json({
+            items,
+            page,
+            pageSize,
+            total,
+            totalPages: Math.max(1, Math.ceil(total / pageSize)),
+            hasPrev: page > 1,
+            hasNext: page * pageSize < total,
+        });
+    } catch (err) {
+        console.error('GET /api/admin/trading/users failed:', err);
+        return res.status(500).json({ error: 'Failed to load admin user trading data.' });
+    }
+});
+
+router.get('/trading/users/:userId', adminAuth, async (req, res) => {
+    try {
+        const userId = String(req.params.userId);
+        const hookIds = await uniqHooksForUser(userId);
+
+        const [user, closed, open] = await Promise.all([
+            User.findById(userId, { email: 1, username: 1, balance: 1, updatedAt: 1 }).lean(),
+            PositionHistory.find({ hook: { $in: hookIds }, finished: true })
+                .sort({ 'data.updated_at': -1, updatedAt: -1 })
+                .limit(500)
+                .lean(),
+            PositionHistory.find({ hook: { $in: hookIds }, finished: false }).lean(),
+        ]);
+
+        const finished = await PositionHistory.find({ hook: { $in: hookIds }, finished: true }).lean();
+
+        const now = new Date();
+        const startOfTodayUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+        const todaysPnl = finished
+            .filter((h) => {
+                const ms = getClosedMs(h);
+                return ms != null && ms >= startOfTodayUTC;
+            })
+            .reduce((s, h) => s + getRealizedPnl(h), 0);
+
+        const trades = closed.map(mapClosed); 
+        const positions = open.map(mapOpen);
+
+        const pnlTotal = trades.reduce((s, t) => s + (Number(t.pnl) || 0), 0);
+        const wins = trades.filter(t => Number(t.pnl) > 0).length;
+        const totalTrades = trades.length;
+        const winRate = totalTrades ? (wins / totalTrades) * 100 : 0;
+
+        const startUTC = new Date();
+        startUTC.setUTCHours(0, 0, 0, 0);
+
+        return res.status(200).json({
+            user: {
+                userId,
+                email: user?.email,
+                firstName: user?.firstName,
+                lastName: user?.lastName,
+                lastActive: user?.updatedAt,
+            },
+            summary: {
+                totalTrades,
+                winRate,
+                pnlTotal,
+                todaysPnl,
+                openPositions: positions.length,
+                totalAssets: user?.balance?.total ?? 0,
+            },
+            positions,
+            tradesSample: trades.slice(0, 5),
+        });
+    } catch (err) {
+        console.error('GET /admin/trading/users/:userId failed', err);
+        return res.status(500).json({ error: 'Failed to load user trading details.' });
+    }
+});
+
+
+router.get('/trading/users/:userId/trades', adminAuth, async (req, res) => {
+    try {
+        const userId = String(req.params.userId);
+        const page = Math.max(1, parseInt(String(req.query.page ?? '1'), 10) || 1);
+        const pageSize = Math.min(100, parseInt(String(req.query.pageSize ?? '25'), 10) || 25);
+        const skip = (page - 1) * pageSize;
+
+        const hookIds = await uniqHooksForUser(userId);
+        const [total, rows] = await Promise.all([
+            PositionHistory.countDocuments({ hook: { $in: hookIds }, finished: true }),
+            PositionHistory.find({ hook: { $in: hookIds }, finished: true })
+                .sort({ 'data.close_time': -1, updatedAt: -1 })
+                .skip(skip).limit(pageSize).lean(),
+        ]);
+
+        const items = rows.map(mapClosed);
+        return res.status(200).json({
+            items,
+            page,
+            pageSize,
+            total,
+            totalPages: Math.max(1, Math.ceil(total / pageSize)),
+        });
+    } catch (err) {
+        console.error('GET /admin/trading/users/:userId/trades failed', err);
+        return res.status(500).json({ error: 'Failed to load user trades.' });
+    }
+});
+
+router.get('/trading/users/:userId/positions', adminAuth, async (req, res) => {
+    try {
+        const userId = String(req.params.userId);
+        const hookIds = await uniqHooksForUser(userId);
+        const active = await PositionHistory.find({ hook: { $in: hookIds }, finished: false })
+            .sort({ updatedAt: -1 })
+            .lean();
+
+        return res.status(200).json(active.map(mapOpen));
+    } catch (err) {
+        console.error('GET /admin/trading/users/:userId/positions failed', err);
+        return res.status(500).json({ error: 'Failed to load open positions.' });
+    }
+});
+
 export default router;

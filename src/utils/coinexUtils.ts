@@ -409,7 +409,7 @@ export const handleTrade = async (
                     unit,
                     computedQty: unit === '%' ? `${amount}` : undefined,
                     leverageUsed: webhook?.leverage ? Number(webhook.leverage) : undefined,
-                    priceUsed: undefined, 
+                    priceUsed: undefined,
                     balanceAvail: undefined,
                     reasonText: msg,
                     code,
@@ -446,7 +446,7 @@ export const handleTrade = async (
                         unit,
                         computedQty: unit === '%' ? `${amount}` : undefined,
                         leverageUsed: webhook?.leverage ? Number(webhook.leverage) : undefined,
-                        priceUsed: undefined, 
+                        priceUsed: undefined,
                         balanceAvail: undefined,
                         reasonText: msg,
                         code,
@@ -498,6 +498,7 @@ export const handleTrade = async (
 
 export const handleSetTP = async (
     takeProfitPrice: string,
+    takeProfitType: string,
     symbol: string,
     coinExApiKey: string,
     coinExApiSecret: string,
@@ -507,7 +508,7 @@ export const handleSetTP = async (
     const data = JSON.stringify({
         market: symbol,
         market_type: 'FUTURES',
-        take_profit_type: 'mark_price',
+        take_profit_type: takeProfitType,
         take_profit_price: takeProfitPrice,
     });
 
@@ -546,6 +547,7 @@ export const handleSetTP = async (
 
 export const handleSetSL = async (
     stopLossPrice: string,
+    stopLossType: string,
     symbol: string,
     coinExApiKey: string,
     coinExApiSecret: string,
@@ -555,7 +557,7 @@ export const handleSetSL = async (
     const data = JSON.stringify({
         market: symbol,
         market_type: 'FUTURES',
-        stop_loss_type: 'mark_price',
+        stop_loss_type: stopLossType,
         stop_loss_price: stopLossPrice,
     });
 
@@ -591,6 +593,113 @@ export const handleSetSL = async (
         };
     }
 }
+
+export const handleAdjustLeverage = async (
+    leverage: number | string,
+    marginMode: 'cross' | 'isolated',
+    symbol: string,
+    coinExApiKey: string,
+    coinExApiSecret: string,
+): Promise<{ success: boolean; message?: string }> => {
+    const timestamp = await getTimestamp();
+
+    const data = JSON.stringify({
+        market: symbol,
+        market_type: 'FUTURES',
+        margin_mode: marginMode,
+        leverage: Math.floor(Number(leverage) || 1),
+    });
+
+    try {
+        const result = await axios.post(
+            commonURL + '/v2/futures/adjust-position-leverage',
+            data,
+            {
+                headers: {
+                    'Content-Type': 'application/json; charset=utf-8',
+                    Accept: 'application/json',
+                    'X-COINEX-KEY': coinExApiKey,
+                    'X-COINEX-SIGN': createAuthorization(
+                        'POST',
+                        '/v2/futures/adjust-position-leverage',
+                        data,
+                        timestamp,
+                        coinExApiSecret
+                    ),
+                    'X-COINEX-TIMESTAMP': timestamp,
+                },
+            }
+        );
+
+        if (result.data?.code === 0) {
+            return { success: true, message: 'Adjusted leverage successfully', };
+        }
+
+        console.error('CoinEx adjust leverage failed:', result.data, data);
+        return { success: false, message: result.data?.message || 'Adjust leverage failed' };
+    } catch (error: any) {
+        console.error('CoinEx adjust leverage failed:', error?.response?.data || error?.message);
+        return { success: false, message: 'Failed to adjust leverage' };
+    }
+};
+
+export const handleClosePosition = async (
+    params: {
+        symbol: string;
+        orderType: 'market' | 'limit';
+        amount?: string | number;
+        price?: string | number;
+    },
+    coinExApiKey: string,
+    coinExApiSecret: string,
+): Promise<{ success: boolean; message?: string }> => {
+    const timestamp = await getTimestamp();
+
+    const body: any = {
+        market: params.symbol,
+        market_type: 'FUTURES',
+        type: params.orderType
+    };
+    if (params.amount !== undefined && params.amount !== null && params.amount !== '') {
+        body.amount = String(params.amount);
+    }
+    if (params.orderType === 'limit') {
+        body.price = String(params.price ?? '');
+    }
+
+    const data = JSON.stringify(body);
+
+    try {
+        const r = await axios.post(
+            commonURL + '/v2/futures/close-position',
+            data,
+            {
+                headers: {
+                    'Content-Type': 'application/json; charset=utf-8',
+                    Accept: 'application/json',
+                    'X-COINEX-KEY': coinExApiKey,
+                    'X-COINEX-SIGN': createAuthorization(
+                        'POST',
+                        '/v2/futures/close-position',
+                        data,
+                        timestamp,
+                        coinExApiSecret
+                    ),
+                    'X-COINEX-TIMESTAMP': timestamp,
+                },
+            }
+        );
+
+        if (r.data?.code === 0) {
+            return { success: true, message: 'Position close request sent' };
+        }
+        console.error('CoinEx close error:', r.data, data);
+        return { success: false, message: r.data?.message || 'Failed to close position' };
+    } catch (err: any) {
+        console.error('CoinEx close error:', err?.response?.data || err?.message);
+        return { success: false, message: 'Failed to close position' };
+    }
+};
 
 export const handleGetDataFromCoinex = async (
     coinExApiKey: string,

@@ -11,6 +11,7 @@ import userRoutes from './routes/users';
 import adminRoutes from './routes/admin';
 import p2pRoutes from './routes/p2p';
 import coinpaymentsRoutes from './routes/coinpayments';
+import dashboardRoutes from './routes/dashboard';
 
 import './cron/cronJobs';
 import websocketServer, { setSocketIOInstance } from "./utils/socket";
@@ -32,6 +33,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/p2p', p2pRoutes);
 app.use('/api/coinpayments', coinpaymentsRoutes);
+app.use('/api/dashboard', dashboardRoutes);
 
 const startServer = async () => {
     try {

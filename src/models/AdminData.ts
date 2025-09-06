@@ -23,36 +23,6 @@ const adminDataSchema = new mongoose.Schema(
         allowSignup: { type: Boolean, required: true },
         aiApiURL: { type: String, required: true },
         systemPrompt: { type: String, required: true },
-        totalPremiumSignals: {
-            type: String,
-            required: true,
-            default: '',
-        },
-        totalBalance: {
-            type: String,
-            required: true,
-            default: '',
-        },
-        totalTrades: {
-            type: String,
-            required: true,
-            default: '',
-        },
-        averageWinRate: {
-            type: String,
-            required: true,
-            default: '',
-        },
-        averageProfit: {
-            type: String,
-            required: true,
-            default: '',
-        },
-        totalPNL: {
-            type: String,
-            required: true,
-            default: '',
-        }
     },
     { timestamps: true }
 );

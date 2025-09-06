@@ -343,12 +343,6 @@ router.post('/update-admin-data', adminAuth, async (req, res) => {
             siteMaintainanceMode,
             webhooksMaintainanceMode,
             allowSignup,
-            totalPremiumSignals,
-            totalBalance,
-            totalTrades,
-            averageWinRate,
-            averageProfit,
-            totalPNL
         } = req.body;
         const data = await AdminData.findOneAndUpdate({}, {
             twitter,
@@ -369,12 +363,6 @@ router.post('/update-admin-data', adminAuth, async (req, res) => {
             siteMaintainanceMode,
             webhooksMaintainanceMode,
             allowSignup,
-            totalPremiumSignals,
-            totalBalance,
-            totalTrades,
-            averageWinRate,
-            averageProfit,
-            totalPNL
             // inviteCodes
         }, { new: true });
         res.status(200).json({

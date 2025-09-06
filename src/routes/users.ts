@@ -376,12 +376,12 @@ router.get('/homepage', async (_req, res) => {
         featuredCardDescription2: admin?.featuredCardDescription2 ?? '',
         siteMaintainanceMode: admin?.siteMaintainanceMode ?? false,
 
-        totalPremiumSignals: premiumLive + ' live', 
-        totalBalance: '$' + totalBalance,
+        totalPremiumSignals: premiumLive, 
+        totalBalance,
         totalTrades: tradesToday,
-        averageWinRate: averageWinRate + '%',
-        averageProfit: averageProfit + ' daily',
-        totalPNL: '$' + totalPNL
+        averageWinRate,
+        averageProfit,
+        totalPNL
       }
     });
   } catch (error) {

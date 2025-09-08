@@ -341,7 +341,7 @@ router.get('/homepage', async (_req, res) => {
         { 'data.realized_pnl': 1 }
       ).lean(),
       PositionHistory.aggregate([
-        { $match: { finished: true } },
+        { $match: { finished: true, updatedAt: { $gte: since30 } } },
         { $group: {
           _id: null,
           pnl: { $sum: { $toDouble: { $ifNull: ['$data.realized_pnl', 0] } } }

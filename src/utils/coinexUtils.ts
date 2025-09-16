@@ -243,6 +243,7 @@ const placeOrderOnCoinEx = async (
 ): Promise<{ success: boolean; data?: any; error?: any }> => {
     const timestamp = await getTimestamp();
 
+    let pendingOrder = null;
     if (isClosing) {
         const pendingOrders = await checkOrderExisting(symbol, action, coinExApiKey, coinExApiSecret);
         const side = action === 'buy' ? 'short' : 'long';
@@ -252,12 +253,25 @@ const placeOrderOnCoinEx = async (
                 success: false,
                 error: 'No pending orders'
             }
+        } else {
+            pendingOrder = pendingOrders.filter((o: any) => o.side === side)[0];
         }
     }
 
     // Determine the final order size. When `unit` is '%', the amount is
     // treated as a percentage of the current open position.
-    const finalAmount = await computePercentageAmount(unit, amount, symbol, coinExApiKey, coinExApiSecret, isClosing);
+
+    let finalAmount = amount;
+    if (unit == '%') {
+        if (isClosing) {
+            finalAmount = pendingOrder.ath_position_amount ?? pendingOrder.close_avbl ?? pendingOrder.amount ?? 0;
+            console.log(finalAmount, 'isClosing');
+        } else {
+            finalAmount = await computePercentageAmount(unit, amount, symbol, coinExApiKey, coinExApiSecret, isClosing);
+            console.log(finalAmount, '!isClosing');
+        }
+    }
+
 
     const data = JSON.stringify({
         market: symbol,

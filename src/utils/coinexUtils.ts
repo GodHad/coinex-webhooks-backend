@@ -1,7 +1,7 @@
 import axios from "axios";
 import crypto from 'crypto';
 import History, { IHistory } from "../models/History";
-import Hook, { IHook } from "../models/Hook";
+import type { IHook } from "../models/Hook";
 import { sendEmail } from "./sendMail";
 import User from "../models/User";
 import dotenv from 'dotenv';

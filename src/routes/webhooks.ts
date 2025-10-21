@@ -4,6 +4,8 @@ import express from 'express';
 import Hook from '../models/Hook';
 import History from '../models/History';
 import axios from 'axios';
+import path from 'path';
+import dotenv from 'dotenv';
 import User, { IUser } from '../models/User';
 import AdminHook from '../models/AdminHook';
 import { jwtAuth } from '../middleware/authorization';
@@ -12,7 +14,7 @@ import ArtemHistory from '../models/Artem';
 import { getTimestamp, sign, preHash } from '../utils/bitgetUtils';
 import { handleTrade } from '../utils/coinexUtils';
 
-require("dotenv").config("../.env");
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 const router = express.Router();
 
@@ -57,7 +59,7 @@ router.post('/:webhookUrl', webhooksMaintenanceMiddleware, async (req, res) => {
                 }
 
                 const result = await handleTrade(webhook, ticker, action, webhook.amount || amount, undefined, webhook.unit);
-                
+
                 results.push({
                     webhookId: webhook._id,
                     success: result.success,
@@ -260,10 +262,10 @@ router.get('/resend/:id', jwtAuth, webhooksMaintenanceMiddleware, async (req, re
 // router.get('/test', async (req, res) => {
 //     try {
 //         const account = privateKeyToAccount("0xa1b4f39a28662cb7d8f957df00c58e9e783c04f34e99b52b833ec03f647240d1");
-        
+
 //         const transport = new hl.HttpTransport();
 //         const exchClient = new hl.ExchangeClient({ wallet: account, transport });
-        
+
 //         // Place an orders
 //         const result = await exchClient.order({
 //             orders: [{

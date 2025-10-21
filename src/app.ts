@@ -1,6 +1,8 @@
 import { createServer } from "http";
 import express from 'express';
 import cors from 'cors';
+import path from 'path';
+import dotenv from 'dotenv';
 
 import { init } from "./db/dbConnection";
 import authRoutes from './routes/auth';
@@ -15,7 +17,7 @@ import dashboardRoutes from './routes/dashboard';
 
 import './cron/cronJobs';
 import websocketServer, { setSocketIOInstance } from "./utils/socket";
-require("dotenv").config("../.env");
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 const app = express();
 const PORT = process.env.PORT || 5050;

@@ -5,7 +5,162 @@ import { handleGetDataFromCoinex, handleGetHistoryDataFromCoinex } from "../util
 import PositionHistory from "../models/PositionHistory";
 import dotenv from 'dotenv';
 import { sendEmail } from "../utils/sendMail";
+import { trailingStopService, TrailingRuntimeConfig } from "../services/trailingStopService";
+import PositionTrailingState, { TrailingType, TrailingSide } from "../models/PositionTrailingState";
 dotenv.config();
+
+const TRAIL_TYPES: TrailingType[] = ['percentage', 'fixed', 'atr', 'volatility'];
+
+const toNumber = (value: any): number | undefined => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : undefined;
+};
+
+const toTrailType = (value: any): TrailingType => {
+    const raw = String(value ?? '').toLowerCase() as TrailingType;
+    return TRAIL_TYPES.includes(raw) ? raw : 'percentage';
+};
+
+const parseSide = (value: any): TrailingSide => {
+    const raw = String(value ?? '').toLowerCase();
+    return raw === 'short' ? 'short' : 'long';
+};
+
+const extractEntryPrice = (position: any): number | undefined => {
+    return (
+        toNumber(position?.avg_entry_price) ??
+        toNumber(position?.entry_price) ??
+        toNumber(position?.open_avg_price) ??
+        toNumber(position?.base_price) ??
+        toNumber(position?.price)
+    );
+};
+
+const extractCurrentPrice = (position: any, fallback: number): number => {
+    const price =
+        toNumber(position?.mark_price) ??
+        toNumber(position?.current_price) ??
+        toNumber(position?.last_price) ??
+        toNumber(position?.index_price) ??
+        toNumber(position?.market_price) ??
+        fallback;
+    return Number.isFinite(price) && price && price > 0 ? price : fallback;
+};
+
+const buildTrailingRuntimeConfigs = async (
+    hook: IHook,
+    histories: Array<{ position: any; finished: boolean }> | undefined
+): Promise<void> => {
+    const hookId = String(hook._id);
+    const rows = Array.isArray(histories) ? histories : [];
+
+    const trailing = hook.trailingConfig;
+    const defaultMinProfit = Math.max(0, toNumber(trailing?.minProfitThreshold) ?? 0);
+    const rawTrailDistance = toNumber(trailing?.trailDistance);
+    const validTrailDistance = Number.isFinite(rawTrailDistance) && (rawTrailDistance as number) > 0;
+    const defaultTrailDistance = validTrailDistance ? (rawTrailDistance as number) : 1.5;
+    const defaultTrailType = toTrailType(trailing?.trailType);
+    const enableByDefault = Boolean(hook.enableAutoTrailing && validTrailDistance);
+
+    const bulkOps: any[] = [];
+    const activePositionIds = new Set<string>();
+
+    for (const row of rows) {
+        if (!row || row.finished) continue;
+        const position = row.position;
+        if (!position) continue;
+
+        const marketRaw = position.market ?? position.symbol;
+        if (!marketRaw) continue;
+
+        const positionId = String(
+            position.position_id ??
+            position.id ??
+            position.order_id ??
+            position.positionId ??
+            `${marketRaw}-${position.side ?? position.hold_side ?? 'long'}`
+        );
+
+        activePositionIds.add(positionId);
+
+        const entryPrice = extractEntryPrice(position);
+        const currentPrice = extractCurrentPrice(position, entryPrice ?? 0);
+        const side = parseSide(position.side ?? position.position_side ?? position.hold_side);
+        const market = String(marketRaw).toUpperCase();
+
+        const setPayload: Record<string, any> = {
+            market,
+            side,
+            isOpen: true,
+        };
+        if (Number.isFinite(entryPrice) && (entryPrice as number) > 0) setPayload.entryPrice = entryPrice;
+        if (Number.isFinite(currentPrice) && (currentPrice as number) > 0) setPayload.currentPrice = currentPrice;
+
+        const insertPayload: Record<string, any> = {
+            minProfitThreshold: defaultMinProfit,
+            trailDistance: defaultTrailDistance,
+            trailType: defaultTrailType,
+            isEnabled: enableByDefault,
+            autoApplied: enableByDefault,
+        };
+
+        bulkOps.push({
+            updateOne: {
+                filter: { hook: hook._id, positionId },
+                update: {
+                    $set: setPayload,
+                    $setOnInsert: insertPayload,
+                },
+                upsert: true,
+            },
+        });
+    }
+
+    if (bulkOps.length > 0) {
+        try {
+            await PositionTrailingState.bulkWrite(bulkOps, { ordered: false });
+        } catch (err) {
+            console.error(`Failed to sync trailing states for hook ${hookId}:`, err);
+        }
+    }
+
+    try {
+        await PositionTrailingState.updateMany(
+            { hook: hook._id, positionId: { $nin: Array.from(activePositionIds) } },
+            { $set: { isOpen: false, isEnabled: false } }
+        ).exec();
+    } catch (err) {
+        console.error(`Failed to mark closed trailing states for hook ${hookId}:`, err);
+    }
+
+    try {
+        await PositionTrailingState.updateMany(
+            { hook: hook._id, isOpen: true, autoApplied: true },
+            {
+                $set: {
+                    minProfitThreshold: defaultMinProfit,
+                    trailDistance: defaultTrailDistance,
+                    trailType: defaultTrailType,
+                    isEnabled: enableByDefault,
+                },
+            }
+        ).exec();
+    } catch (err) {
+        console.error(`Failed to refresh auto-applied trailing configs for hook ${hookId}:`, err);
+    }
+
+    await PositionTrailingState.updateMany(
+        { hook: hook._id, isOpen: true, autoApplied: true },
+        {
+            $set: {
+                minProfitThreshold: defaultMinProfit,
+                trailDistance: defaultTrailDistance,
+                trailType: defaultTrailType,
+                isEnabled: enableByDefault,
+            },
+        }
+    ).exec();
+};
 
 async function removeOldWebhooks(): Promise<void> {
     try {
@@ -91,10 +246,13 @@ async function removeOldWebhooks(): Promise<void> {
 async function getAccountsData(): Promise<void> {
     try {
         const users = await User.find();
+        const hookById = new Map<string, IHook>();
+        const runtimeConfigs: TrailingRuntimeConfig[] = [];
 
-        users.forEach(async user => {
+        for (const user of users) {
             const hooks = await Webhook.find({ creator: user._id });
-            const uniqueHooksMap = new Map();
+            hooks.forEach(hook => hookById.set(String(hook._id), hook.toObject<IHook>()));
+            const uniqueHooksMap = new Map<string, IHook>();
 
             hooks.forEach(hook => {
                 const key = `${hook.coinExApiKey}::${hook.coinExApiSecret}`;
@@ -105,9 +263,8 @@ async function getAccountsData(): Promise<void> {
 
             const uniqueHooks = Array.from(uniqueHooksMap.values());
             let total = 0, available = 0, inPosition = 0;
-            for (let i = 0; i < hooks.length; i++) {
-                const hook = hooks[i];
-                const { success, data, error } = await handleGetDataFromCoinex(hook.coinExApiKey, hook.coinExApiSecret, `/v2/assets/futures/balance`);
+            for (const hook of hooks) {
+                const { success, data } = await handleGetDataFromCoinex(hook.coinExApiKey, hook.coinExApiSecret, `/v2/assets/futures/balance`);
 
                 if (success && data.code === 0) {
                     const subAccounts = data.data;
@@ -137,13 +294,17 @@ async function getAccountsData(): Promise<void> {
                 const historyData = await handleGetHistoryDataFromCoinex(hook.coinExApiKey, hook.coinExApiSecret, hook.lastRetrieveTime || Date.now());
 
                 if (historyData.success && historyData.data) {
-                    await PositionHistory.deleteMany({ hook: hook._id, finished: false });
                     const histories = historyData.data;
+                    await PositionHistory.deleteMany({ hook: hook._id, finished: false });
                     const positionHistories = histories.map((history: any) => ({ data: history.position, hook: hook._id, finished: history.finished }));
 
                     await PositionHistory.insertMany(positionHistories);
                     hook.lastRetrieveTime = historyData.lastTimestamp || Date.now();
                     await hook.save();
+
+                    await buildTrailingRuntimeConfigs(hook, histories);
+                } else if (historyData.data) {
+                    await buildTrailingRuntimeConfigs(hook, historyData.data);
                 }
             }
 
@@ -157,7 +318,49 @@ async function getAccountsData(): Promise<void> {
             user.markModified('balance');
 
             await user.save();
-        })
+        }
+
+        const openStates = await PositionTrailingState.find({ isOpen: true, isEnabled: true }).lean();
+        for (const state of openStates) {
+            let hook = hookById.get(String(state.hook));
+            if (!hook) {
+                const fetched = await Webhook.findById(state.hook).lean<IHook | null>();
+                if (!fetched) continue;
+                hookById.set(String(state.hook), fetched);
+                hook = fetched;
+            }
+            if (!hook) continue;
+
+            const entry = Number(state.entryPrice ?? 0);
+            const distance = Number(state.trailDistance ?? 0);
+            if (!Number.isFinite(entry) || entry <= 0) continue;
+            if (!Number.isFinite(distance) || distance <= 0) continue;
+
+            const current = Number(state.currentPrice ?? entry);
+            const resolvedTrailType = (state.trailType as TrailingType) || toTrailType(hook.trailingConfig?.trailType);
+            const minProfit = Number(
+                state.minProfitThreshold ?? hook.trailingConfig?.minProfitThreshold ?? 0
+            );
+
+            runtimeConfigs.push({
+                stateId: String(state._id),
+                positionId: state.positionId,
+                hookId: String(state.hook),
+                market: state.market,
+                side: parseSide(state.side),
+                entryPrice: entry,
+                currentPrice: Number.isFinite(current) && current > 0 ? current : entry,
+                minProfitThreshold: minProfit,
+                trailDistance: distance,
+                trailType: resolvedTrailType,
+                coinExApiKey: hook.coinExApiKey,
+                coinExApiSecret: hook.coinExApiSecret,
+                highestPrice: state.highestPrice,
+                currentStopLoss: state.currentStopLoss,
+            });
+        }
+
+        trailingStopService.syncEnabledStates(runtimeConfigs);
     } catch (error) {
         console.error("❌ Get Accounts Data:", error);
     }

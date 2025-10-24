@@ -4,9 +4,62 @@ import { JWTRequest } from '../types/JWTRequest';
 import User from '../models/User';
 import Hook from '../models/Hook';
 import PositionHistory from '../models/PositionHistory';
+import PositionTrailingState, { TrailingType } from '../models/PositionTrailingState';
+import { trailingStopService } from '../services/trailingStopService';
 import { handleAdjustLeverage, handleClosePosition, handleSetSL, handleSetTP } from '../utils/coinexUtils';
 
 const router = express.Router();
+
+const TRAILING_TYPES: TrailingType[] = ['percentage', 'fixed', 'atr', 'volatility'];
+
+const toNum = (value: any, fallback?: number): number => {
+    const n = Number(value);
+    if (Number.isFinite(n)) return n;
+    return fallback ?? NaN;
+};
+
+const normalizeTrailType = (value: any, fallback: TrailingType = 'percentage'): TrailingType => {
+    const raw = String(value ?? '').toLowerCase();
+    return (TRAILING_TYPES.includes(raw as TrailingType) ? raw : fallback) as TrailingType;
+};
+
+const normalizeTrailSide = (value: any): 'long' | 'short' => {
+    const raw = String(value ?? '').toLowerCase();
+    return raw === 'short' ? 'short' : 'long';
+};
+
+const derivePositionId = (position: any, market: string, side: string) => {
+    return String(
+        position?.position_id ??
+        position?.id ??
+        position?.order_id ??
+        position?.positionId ??
+        `${market}-${side || 'long'}`
+    );
+};
+
+const extractEntryPriceFromData = (position: any): number | undefined => {
+    const candidates = [
+        toNum(position?.avg_entry_price),
+        toNum(position?.entry_price),
+        toNum(position?.open_avg_price),
+        toNum(position?.base_price),
+        toNum(position?.price),
+    ];
+    return candidates.find(v => Number.isFinite(v) && v > 0);
+};
+
+const extractCurrentPriceFromData = (position: any, fallback: number): number => {
+    const candidates = [
+        toNum(position?.mark_price),
+        toNum(position?.current_price),
+        toNum(position?.last_price),
+        toNum(position?.index_price),
+        toNum(position?.market_price),
+    ];
+    const price = candidates.find(v => Number.isFinite(v) && v > 0);
+    return Number.isFinite(price) && (price as number) > 0 ? (price as number) : fallback;
+};
 
 router.get('/card-info', jwtAuth, async (req: JWTRequest, res) => {
     try {
@@ -665,6 +718,195 @@ router.post('/positions/:id/leverage', jwtAuth, async (req: JWTRequest, res) => 
     }
 });
 
+router.get('/positions/trailing', jwtAuth, async (req: JWTRequest, res) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+        const hooks = await Hook.find({ creator: userId }).lean();
+        if (!hooks.length) return res.status(200).json([]);
+
+        const hookIds = hooks.map(h => h._id);
+        const states = await PositionTrailingState.find({ hook: { $in: hookIds }, isOpen: true }).lean();
+
+        const response = states.map(state => ({
+            id: String(state._id),
+            positionId: String(state.positionId),
+            market: state.market,
+            side: state.side === 'short' ? 'short' as const : 'long' as const,
+            entryPrice: Number(state.entryPrice ?? 0),
+            currentPrice: Number(state.currentPrice ?? 0),
+            minProfitThreshold: Number(state.minProfitThreshold ?? 0),
+            trailDistance: Number(state.trailDistance ?? 0),
+            trailType: (state.trailType as TrailingType) || 'percentage',
+            isEnabled: Boolean(state.isEnabled),
+            highestPrice: state.highestPrice != null ? Number(state.highestPrice) : undefined,
+            currentStopLoss: state.currentStopLoss != null ? Number(state.currentStopLoss) : undefined,
+            lastCheckedAt: state.lastCheckedAt || undefined,
+            autoApplied: Boolean(state.autoApplied),
+        }));
+
+        return res.status(200).json(response);
+    } catch (err) {
+        console.error('GET /positions/trailing failed:', err);
+        return res.status(500).json({ error: 'Failed to fetch trailing positions' });
+    }
+});
+router.post('/positions/:id/trailing/enable', jwtAuth, async (req: JWTRequest, res) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+        const { id } = req.params;
+        const { minProfitThreshold, trailDistance, trailType } = req.body || {};
+        const { position, hook } = await findUserPosition(userId, id);
+        if (!position) return res.status(404).json({ error: 'Position not found' });
+        if (!hook?.coinExApiKey || !hook?.coinExApiSecret) return res.status(400).json({ error: 'API key missing' });
+
+        const positionData = position.data || {};
+        const market = String(positionData.market || positionData.symbol || '').toUpperCase();
+        if (!market) return res.status(400).json({ error: 'Unknown market symbol' });
+
+        const entryPrice = extractEntryPriceFromData(positionData);
+        if (!entryPrice || entryPrice <= 0) return res.status(400).json({ error: 'Entry price unavailable' });
+
+        const currentPrice = extractCurrentPriceFromData(positionData, entryPrice);
+        const side = normalizeTrailSide(positionData.side ?? positionData.position_side ?? positionData.hold_side);
+        const positionId = derivePositionId(positionData, market, side);
+
+        const existingState = await PositionTrailingState.findOne({ hook: hook._id, positionId });
+        const resolvedMinProfit = (() => {
+            const candidate = toNum(minProfitThreshold);
+            if (Number.isFinite(candidate) && candidate >= 0) return candidate;
+            if (existingState?.minProfitThreshold != null) return existingState.minProfitThreshold;
+            if (hook.trailingConfig?.minProfitThreshold != null) return Number(hook.trailingConfig.minProfitThreshold);
+            return 2.0;
+        })();
+
+        const resolvedTrailDistance = (() => {
+            const candidate = toNum(trailDistance);
+            if (Number.isFinite(candidate) && candidate > 0) return candidate;
+            if (existingState?.trailDistance != null && existingState.trailDistance > 0) return existingState.trailDistance;
+            if (hook.trailingConfig?.trailDistance != null && Number(hook.trailingConfig.trailDistance) > 0) {
+                return Number(hook.trailingConfig.trailDistance);
+            }
+            return 1.5;
+        })();
+
+        if (!Number.isFinite(resolvedTrailDistance) || resolvedTrailDistance <= 0) {
+            return res.status(400).json({ error: 'Invalid trail distance' });
+        }
+
+        const resolvedTrailType = normalizeTrailType(
+            trailType ?? existingState?.trailType ?? hook.trailingConfig?.trailType ?? 'percentage'
+        );
+
+        let state = existingState;
+        if (!state) {
+            state = new PositionTrailingState({
+                hook: hook._id,
+                positionId,
+                market,
+                side,
+                entryPrice,
+                currentPrice,
+                minProfitThreshold: resolvedMinProfit,
+                trailDistance: resolvedTrailDistance,
+                trailType: resolvedTrailType,
+                isEnabled: true,
+                autoApplied: false,
+                isOpen: true,
+                highestPrice: currentPrice,
+            });
+        } else {
+            state.market = market;
+            state.side = side;
+            state.entryPrice = entryPrice;
+            state.currentPrice = currentPrice;
+            state.minProfitThreshold = resolvedMinProfit;
+            state.trailDistance = resolvedTrailDistance;
+            state.trailType = resolvedTrailType;
+            state.isEnabled = true;
+            state.autoApplied = false;
+            state.isOpen = true;
+            if (!Number.isFinite(state.highestPrice) || (side === 'long' && currentPrice > (state.highestPrice ?? 0))) {
+                state.highestPrice = currentPrice;
+            } else if (side === 'short' && currentPrice < (state.highestPrice ?? Infinity)) {
+                state.highestPrice = currentPrice;
+            }
+        }
+
+        state.lastCheckedAt = new Date();
+        await state.save();
+
+        trailingStopService.enableForPosition({
+            stateId: String(state._id),
+            positionId,
+            hookId: String(hook._id),
+            market,
+            side,
+            entryPrice,
+            currentPrice,
+            minProfitThreshold: state.minProfitThreshold,
+            trailDistance: state.trailDistance,
+            trailType: state.trailType,
+            coinExApiKey: hook.coinExApiKey,
+            coinExApiSecret: hook.coinExApiSecret,
+            highestPrice: state.highestPrice,
+            currentStopLoss: state.currentStopLoss,
+        });
+
+        return res.status(200).json({
+            success: true,
+            state: {
+                id: String(state._id),
+                positionId: state.positionId,
+                market: state.market,
+                side: state.side,
+                minProfitThreshold: state.minProfitThreshold,
+                trailDistance: state.trailDistance,
+                trailType: state.trailType,
+                highestPrice: state.highestPrice,
+                currentStopLoss: state.currentStopLoss,
+            },
+        });
+    } catch (err: any) {
+        console.error('POST /positions/:id/trailing/enable failed:', err?.message || err);
+        return res.status(500).json({ error: 'Failed to enable trailing stop' });
+    }
+});
+
+router.post('/positions/:id/trailing/disable', jwtAuth, async (req: JWTRequest, res) => {
+    try {
+        const userId = req.user?.userId;
+        if (!userId) return res.status(401).json({ error: 'Unauthorized' });
+
+        const { id } = req.params;
+        const { position, hook } = await findUserPosition(userId, id);
+        if (!position) return res.status(404).json({ error: 'Position not found' });
+        if (!hook?.coinExApiKey || !hook?.coinExApiSecret) return res.status(400).json({ error: 'API key missing' });
+
+        const positionData = position.data || {};
+        const market = String(positionData.market || positionData.symbol || '').toUpperCase();
+        const side = normalizeTrailSide(positionData.side ?? positionData.position_side ?? positionData.hold_side);
+        const positionId = derivePositionId(positionData, market, side);
+
+        const state = await PositionTrailingState.findOne({ hook: hook._id, positionId });
+        if (state) {
+            state.isEnabled = false;
+            state.autoApplied = false;
+            await state.save();
+        }
+
+        await trailingStopService.disablePosition(positionId, String(hook._id));
+
+        return res.status(200).json({ success: true });
+    } catch (err: any) {
+        console.error('POST /positions/:id/trailing/disable failed:', err?.message || err);
+        return res.status(500).json({ error: 'Failed to disable trailing stop' });
+    }
+});
+
 router.post('/position/close', jwtAuth, async (req: JWTRequest, res) => {
     try {
         const userId = req.user?.userId!;
@@ -690,3 +932,4 @@ router.post('/position/close', jwtAuth, async (req: JWTRequest, res) => {
 });
 
 export default router;
+

@@ -91,7 +91,7 @@ async function fetchFuturesAvailableBalance(
     return undefined;
 }
 
-async function fetchTickerPriceV2(
+export async function fetchTickerPriceV2(
     symbol: string,
     coinExApiKey: string,
     coinExApiSecret: string
@@ -203,26 +203,38 @@ const computePercentageAmount = async (
     coinExApiSecret: string,
     isClosing: boolean
 ): Promise<string> => {
-    if (unit !== '%') return amountStr;
+    const normalizedUnit = String(unit || '').toUpperCase();
+    if (normalizedUnit !== '%' && normalizedUnit !== 'USDT') return amountStr;
 
-    const percent = Number(amountStr);
-    if (!Number.isFinite(percent) || percent <= 0) return amountStr;
+    const value = Number(amountStr);
+    if (!Number.isFinite(value) || value <= 0) return amountStr;
 
     try {
         const quote = ['USDT', 'USDC', 'USD', 'BUSD', 'TUSD'].find(q => symbol.endsWith(q)) || 'USDT';
+        const rawLeverage = await resolveLeverage(symbol, coinExApiKey, coinExApiSecret);
+        const leverage = Number.isFinite(rawLeverage) && (rawLeverage as number) > 0 ? (rawLeverage as number) : 1;
+
+        if (normalizedUnit === 'USDT') {
+            const lastPrice = await fetchTickerPriceV2(symbol, coinExApiKey, coinExApiSecret);
+            if (!lastPrice || !Number.isFinite(lastPrice) || lastPrice <= 0) return amountStr;
+
+            const notional = value * leverage;
+            const assetQty = notional / lastPrice;
+            return assetQty.toFixed(8);
+        }
+
+        if (isClosing) return amountStr;
 
         const [availableBalance, lastPrice] = await Promise.all([
             fetchFuturesAvailableBalance(quote, coinExApiKey, coinExApiSecret),
             fetchTickerPriceV2(symbol, coinExApiKey, coinExApiSecret),
         ]);
 
-        if (availableBalance === undefined || availableBalance <= 0 || !lastPrice || !Number.isFinite(lastPrice)) {
+        if (availableBalance === undefined || availableBalance <= 0 || !lastPrice || !Number.isFinite(lastPrice) || lastPrice <= 0) {
             return amountStr;
         }
 
-        const leverage = await resolveLeverage(symbol, coinExApiKey, coinExApiSecret);
-
-        const marginPortion = (availableBalance * percent) / 100;
+        const marginPortion = (availableBalance * value) / 100;
         const notional = marginPortion * leverage;
         const assetQty = notional / lastPrice;
 
@@ -262,16 +274,18 @@ const placeOrderOnCoinEx = async (
     // treated as a percentage of the current open position.
 
     let finalAmount = amount;
-    if (unit == '%') {
-        if (isClosing) {
-            finalAmount = pendingOrder.ath_position_amount ?? pendingOrder.close_avbl ?? pendingOrder.amount ?? 0;
-            console.log(finalAmount, 'isClosing');
-        } else {
+    if (isClosing) {
+        finalAmount = pendingOrder.ath_position_amount ?? pendingOrder.close_avbl ?? pendingOrder.amount ?? 0;
+        console.log(finalAmount, 'isClosing');
+    } else {
+        if (unit === '%') {
             finalAmount = await computePercentageAmount(unit, amount, symbol, coinExApiKey, coinExApiSecret, isClosing);
             console.log(finalAmount, '!isClosing');
+        } else if (unit?.toUpperCase() === 'USDT') {
+            finalAmount = await computePercentageAmount(unit, amount, symbol, coinExApiKey, coinExApiSecret, isClosing);
+            console.log(finalAmount, 'USDT unit');
         }
     }
-
 
     const data = JSON.stringify({
         market: symbol,
@@ -391,6 +405,8 @@ export const handleTrade = async (
     history?: IHistory,
     unit?: string,
 ): Promise<{ success: boolean; message?: string }> => {
+    // Optionally adjust leverage/margin mode automatically before opening positions
+    const mapMarginMode = (t?: number): 'cross' | 'isolated' => (t === 2 ? 'isolated' : 'cross');
     const requiredActions = history ? [{
         action: history.action,
         isClosing: history.positionState !== 'neutral'
@@ -398,6 +414,18 @@ export const handleTrade = async (
     const user = await User.findById(webhook.creator._id || webhook.creator);
 
     for (const { action: tradeAction, isClosing } of requiredActions) {
+        // Apply default leverage/position settings for opening trades when enabled
+        if (!isClosing && (webhook as any)?.autoApplySettings) {
+            const lev = Number((webhook as any)?.defaultLeverage || 0);
+            const mode = mapMarginMode((webhook as any)?.defaultPositionType || 1);
+            if (Number.isFinite(lev) && lev > 0) {
+                try {
+                    await handleAdjustLeverage(lev, mode, ticker, webhook.coinExApiKey, webhook.coinExApiSecret);
+                } catch (e) {
+                    console.warn('Auto leverage apply failed:', (e as any)?.message || e);
+                }
+            }
+        }
         const { success, data, error } = await placeOrderOnCoinEx(
             ticker,
             tradeAction,

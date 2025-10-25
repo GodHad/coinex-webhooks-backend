@@ -276,18 +276,18 @@ class TrailingStopService {
                             await this.saveState(cfg, persistBase);
                         }
 
-                        if (cfg.currentStopLoss !== undefined && cfg.currentStopLoss !== null) {
-                            const triggered = cfg.side === 'long' ? price <= cfg.currentStopLoss : price >= cfg.currentStopLoss;
-                            if (triggered) {
-                                this.items.delete(this.joinKey(cfg.hookId, cfg.positionId));
-                                await this.saveState(cfg, {
-                                    ...persistBase,
-                                    highestPrice: cfg.highestPrice,
-                                    currentStopLoss: cfg.currentStopLoss,
-                                    isEnabled: false,
-                                });
-                            }
-                        }
+                        // if (cfg.currentStopLoss !== undefined && cfg.currentStopLoss !== null) {
+                        //     const triggered = cfg.side === 'long' ? price <= cfg.currentStopLoss : price >= cfg.currentStopLoss;
+                        //     if (triggered) {
+                        //         this.items.delete(this.joinKey(cfg.hookId, cfg.positionId));
+                        //         await this.saveState(cfg, {
+                        //             ...persistBase,
+                        //             highestPrice: cfg.highestPrice,
+                        //             currentStopLoss: cfg.currentStopLoss,
+                        //             isEnabled: false,
+                        //         });
+                        //     }
+                        // }
                     } catch {
                         // ignore per-position errors
                     }
